@@ -38,7 +38,9 @@ int setup_window(struct window *w) {
   char *wm_protocols = "WM_PROTOCOLS";
   char *wm_delete_window = "WM_DELETE_WINDOW";
   uint32_t mask = XCB_CW_EVENT_MASK;
-  uint32_t values[] = { XCB_EVENT_MASK_STRUCTURE_NOTIFY };
+  uint32_t values[] = {
+    XCB_EVENT_MASK_STRUCTURE_NOTIFY
+  };
   xcb_intern_atom_cookie_t protocol_ck, delete_ck;
   xcb_intern_atom_reply_t *protocol, *delete;
 
@@ -135,7 +137,9 @@ struct window *window_new(char *title, uint16_t width, uint16_t height) {
 void window_del(struct window *w) {
   if (!w) return;
   xcb_destroy_window(w->cn, w->wn);
+  xcb_flush(w->cn);
   xcb_disconnect(w->cn);
+  free(w);
 }
 
 void window_update(struct window *w) {
@@ -165,6 +169,7 @@ void window_update(struct window *w) {
       break;
     }
     }
+    free(event);
   }
 }
 

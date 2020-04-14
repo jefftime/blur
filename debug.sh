@@ -1,3 +1,3 @@
 #!/bin/sh -e
 
-lldb bin/blur
+ninja -C bin && lldb bin/blur
