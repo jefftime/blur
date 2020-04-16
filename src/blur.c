@@ -1,6 +1,7 @@
 #include "error.h"
 #include "window.h"             /* window_new, window_del */
 #include "keypoll.h"            /* kp_new, kp_del */
+#include <stdio.h>              /* printf, fflush */
 
 int main(int argc, char **argv) {
   enum {
@@ -16,6 +17,8 @@ int main(int argc, char **argv) {
   kp = kp_new();
   if (!kp) goto err;
   for (;;) {
+    int32_t x, y, z, rx, ry, rz;
+
     if (window_should_close(w)) break;
     kp_update(kp);
     window_update(w);
@@ -27,6 +30,9 @@ int main(int argc, char **argv) {
     if (kp_getkey_press(kp, KP_BTN_NORTH)) puts("BTN_NORTH");
     if (kp_getkey_press(kp, KP_BTN_WEST)) puts("BTN_WEST");
     if (kp_getkey_press(kp, KP_BTN_EAST)) puts("BTN_EAST");
+    kp_getpos_analogs(kp, &x, &y, &z, &rx, &ry, &rz);
+    printf("%d %d %d | %d %d %d\n", x, y, z, rx, ry, rz);
+    fflush(stdout);
   }
   window_del(w);
   kp_del(kp);

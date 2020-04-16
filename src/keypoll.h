@@ -1,6 +1,8 @@
 #ifndef KEYPOLL_H
 #define KEYPOLL_H
 
+#include "sized_types.h"
+
 struct kp_ctx;
 
 enum kp_key_state {
@@ -162,5 +164,14 @@ void kp_del(struct kp_ctx *);
 void kp_update(struct kp_ctx *);
 int kp_getkey(struct kp_ctx *kp, enum kp_key key);
 int kp_getkey_press(struct kp_ctx *kp, enum kp_key key);
+void kp_getpos_analogs(
+  struct kp_ctx *kp,
+  int32_t *out_x,
+  int32_t *out_y,
+  int32_t *out_z,
+  int32_t *out_rx,
+  int32_t *out_ry,
+  int32_t *out_rz
+);
 
 #endif

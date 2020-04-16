@@ -1,4 +1,5 @@
 #include "keypoll.h"
+#include "sized_types.h"
 #include <libevdev-1.0/libevdev/libevdev.h>
 #include <dirent.h>             /* opendir, readdir */
 #include <fcntl.h>              /* open */
@@ -16,6 +17,16 @@ struct kp_ctx {
   int fds[MAX_DEVICES];
   struct libevdev *devs[MAX_DEVICES];
   unsigned char keymap[KP_MAX_KEYS];
+  struct {
+    int32_t stick_x;
+    int32_t stick_y;
+    int32_t trigger;
+  } left;
+  struct {
+    int32_t stick_x;
+    int32_t stick_y;
+    int32_t trigger;
+  } right;
 };
 
 size_t get_key_index(int code) {
@@ -295,7 +306,20 @@ void kp_update(struct kp_ctx *kp) {
       set_keymap(kp, e.code, e.value);
       break;
 
+      /* gamepad analog sticks/triggers */
     case EV_ABS:
+      switch (e.code) {
+      case ABS_X: kp->left.stick_x = e.value; break;
+      case ABS_Y: kp->left.stick_y = e.value; break;
+      case ABS_Z: kp->left.trigger = e.value; break;
+      case ABS_RX: kp->right.stick_x = e.value; break;
+      case ABS_RY: kp->right.stick_y = e.value; break;
+      case ABS_RZ: kp->right.trigger = e.value; break;
+      }
+      break;
+
+      /* mouse movement */
+    case EV_REL:
       break;
     }
   }
@@ -308,4 +332,21 @@ int kp_getkey(struct kp_ctx *kp, enum kp_key key) {
 
 int kp_getkey_press(struct kp_ctx *kp, enum kp_key key) {
   return kp_getkey(kp, key) == KP_STATE_PRESSED;
+}
+
+void kp_getpos_analogs(
+  struct kp_ctx *kp,
+  int32_t *out_x,
+  int32_t *out_y,
+  int32_t *out_z,
+  int32_t *out_rx,
+  int32_t *out_ry,
+  int32_t *out_rz
+) {
+  if (out_x) *out_x = kp->left.stick_x;
+  if (out_y) *out_y = kp->left.stick_y;
+  if (out_z) *out_z = kp->left.trigger;
+  if (out_rx) *out_rx = kp->right.stick_x;
+  if (out_ry) *out_ry = kp->right.stick_y;
+  if (out_rz) *out_rz = kp->right.trigger;
 }
