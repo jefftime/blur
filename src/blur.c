@@ -19,6 +19,14 @@ int main(int argc, char **argv) {
     if (window_should_close(w)) break;
     kp_update(kp);
     window_update(w);
+
+    if (kp_getkey(kp, KP_KEY_Q)) puts("Q");
+    if (kp_getkey_press(kp, KP_KEY_A)) puts("A");
+    if (kp_getkey_press(kp, KP_BTN_LEFT)) puts("BTN_LEFT");
+    if (kp_getkey_press(kp, KP_BTN_SOUTH)) puts("BTN_SOUTH");
+    if (kp_getkey_press(kp, KP_BTN_NORTH)) puts("BTN_NORTH");
+    if (kp_getkey_press(kp, KP_BTN_WEST)) puts("BTN_WEST");
+    if (kp_getkey_press(kp, KP_BTN_EAST)) puts("BTN_EAST");
   }
   window_del(w);
   kp_del(kp);
