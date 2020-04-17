@@ -173,6 +173,11 @@ void window_update(struct window *w) {
   }
 }
 
+void window_close(struct window *w) {
+  if (!w) return;
+  w->should_close = 1;
+}
+
 int window_should_close(struct window *w) {
   if (!w) return 0;
   return w->should_close;

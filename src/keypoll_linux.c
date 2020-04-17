@@ -1,6 +1,6 @@
 #include "keypoll.h"
 #include "sized_types.h"
-#include <libevdev-1.0/libevdev/libevdev.h>
+#include <linux/input.h>        /* struct input_event */
 #include <dirent.h>             /* opendir, readdir */
 #include <fcntl.h>              /* open */
 #include <stddef.h>             /* size_t */
@@ -15,8 +15,11 @@ enum {
 struct kp_ctx {
   size_t n_devices;
   int fds[MAX_DEVICES];
-  struct libevdev *devs[MAX_DEVICES];
   unsigned char keymap[KP_MAX_KEYS];
+  struct {
+    int32_t x;
+    int32_t y;
+  } mouse;
   struct {
     int32_t stick_x;
     int32_t stick_y;
@@ -204,29 +207,20 @@ int process_devices(struct kp_ctx *kp, size_t n_devices, char **devices) {
   };
 
   char filepath[256] = "/dev/input/by-path/";
-  int rc;
   size_t i;
 
   kp->n_devices = n_devices;
   for (i = 0; i < n_devices; ++i) {
-    struct libevdev *dev = NULL;
-
     strcat(filepath, devices[i]);
     kp->fds[i] = open(filepath, O_RDONLY | O_NONBLOCK);
     /* we're going to reuse filepath for each device */
     filepath[filepath_end] = '\0';
     if (kp->fds[i] < 0) goto err;
-    rc = libevdev_new_from_fd(kp->fds[i], &dev);
-    if (rc < 0) goto err;
-    kp->devs[i] = dev;
     continue;
 
   err:
-    /* close all previous file descriptors and free libevdev objects */
-    while (i--) {
-      libevdev_free(kp->devs[i]);
-      close(kp->fds[i]);
-    }
+    /* close all previous file descriptors */
+    while (i--) close(kp->fds[i]);
     return -1;
   }
   return 0;
@@ -283,10 +277,7 @@ void kp_del(struct kp_ctx *kp) {
   size_t i;
 
   if (!kp) return;
-  for (i = 0; i < kp->n_devices; ++i) {
-    libevdev_free(kp->devs[i]);
-    close(kp->fds[i]);
-  }
+  for (i = 0; i < kp->n_devices; ++i) close(kp->fds[i]);
   free(kp);
 }
 
@@ -296,31 +287,33 @@ void kp_update(struct kp_ctx *kp) {
 
   update_states(kp);
   for (i = 0; i < kp->n_devices; ++i) {
-    int rc;
+    ssize_t rc;
     struct input_event e;
 
-    rc = libevdev_next_event(kp->devs[i], LIBEVDEV_READ_FLAG_NORMAL, &e);
-    if (rc != LIBEVDEV_READ_STATUS_SUCCESS) continue;
-    switch (e.type) {
-    case EV_KEY:
-      set_keymap(kp, e.code, e.value);
-      break;
+    while ((rc = read(kp->fds[i], &e, sizeof(struct input_event))) > 0) {
+      switch (e.type) {
+      case EV_KEY:
+        set_keymap(kp, e.code, e.value);
+        break;
 
-      /* gamepad analog sticks/triggers */
-    case EV_ABS:
-      switch (e.code) {
-      case ABS_X: kp->left.stick_x = e.value; break;
-      case ABS_Y: kp->left.stick_y = e.value; break;
-      case ABS_Z: kp->left.trigger = e.value; break;
-      case ABS_RX: kp->right.stick_x = e.value; break;
-      case ABS_RY: kp->right.stick_y = e.value; break;
-      case ABS_RZ: kp->right.trigger = e.value; break;
+        /* gamepad analog sticks/triggers */
+      case EV_ABS:
+        switch (e.code) {
+        case ABS_MT_POSITION_X: kp->mouse.x = e.value; break;
+        case ABS_MT_POSITION_Y: kp->mouse.y = e.value; break;
+        case ABS_X: kp->left.stick_x = e.value; break;
+        case ABS_Y: kp->left.stick_y = e.value; break;
+        case ABS_Z: kp->left.trigger = e.value; break;
+        case ABS_RX: kp->right.stick_x = e.value; break;
+        case ABS_RY: kp->right.stick_y = e.value; break;
+        case ABS_RZ: kp->right.trigger = e.value; break;
+        }
+        break;
+
+        /* mouse movement */
+      case EV_REL:
+        break;
       }
-      break;
-
-      /* mouse movement */
-    case EV_REL:
-      break;
     }
   }
 }
@@ -332,6 +325,11 @@ int kp_getkey(struct kp_ctx *kp, enum kp_key key) {
 
 int kp_getkey_press(struct kp_ctx *kp, enum kp_key key) {
   return kp_getkey(kp, key) == KP_STATE_PRESSED;
+}
+
+void kp_getpos_mouse(struct kp_ctx *kp, int32_t *out_x, int32_t *out_y) {
+  if (out_x) *out_x = kp->mouse.x;
+  if (out_y) *out_y = kp->mouse.y;
 }
 
 void kp_getpos_analogs(
