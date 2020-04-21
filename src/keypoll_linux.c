@@ -1,15 +1,16 @@
 #include "keypoll.h"
 #include "sized_types.h"
-#include <linux/input.h>        /* struct input_event */
-#include <dirent.h>             /* opendir, readdir */
-#include <fcntl.h>              /* open */
-#include <stddef.h>             /* size_t */
-#include <stdlib.h>             /* free */
-#include <string.h>             /* strlen, strcat */
-#include <unistd.h>             /* close */
+#include <linux/input.h>
+#include <dirent.h>
+#include <fcntl.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 enum {
-  MAX_DEVICES = 32
+  MAX_DEVICES = 32,
+  MAX_MT_SLOTS = 12
 };
 
 struct kp_ctx {
@@ -17,8 +18,18 @@ struct kp_ctx {
   int fds[MAX_DEVICES];
   unsigned char keymap[KP_MAX_KEYS];
   struct {
-    int32_t x;
-    int32_t y;
+    long active_slot;
+    struct {
+      int32_t id;
+      int32_t x;
+      int32_t y;
+      int32_t prev_x;
+      int32_t prev_y;
+    } slots[MAX_MT_SLOTS];
+  } mt;
+  struct {
+    int32_t dx;
+    int32_t dy;
   } mouse;
   struct {
     int32_t stick_x;
@@ -296,11 +307,25 @@ void kp_update(struct kp_ctx *kp) {
         set_keymap(kp, e.code, e.value);
         break;
 
-        /* gamepad analog sticks/triggers */
+        /* gamepad analog sticks/triggers and multitouch */
       case EV_ABS:
         switch (e.code) {
-        case ABS_MT_POSITION_X: kp->mouse.x = e.value; break;
-        case ABS_MT_POSITION_Y: kp->mouse.y = e.value; break;
+        case ABS_MT_SLOT:
+          kp->mt.active_slot = e.value;
+          break;
+        case ABS_MT_TRACKING_ID:
+          if (ABS_MT_TRACKING_ID > 0) {
+            kp->mt.slots[kp->mt.active_slot].id = e.value;
+          }
+          else {
+            kp->mt.slots[kp->mt.active_slot].id = e.value;
+          }
+          break;
+        case ABS_MT_POSITION_X:
+          if (kp->mt.active_slot != 0) break;
+          break;
+        case ABS_MT_POSITION_Y:
+          break;
         case ABS_X: kp->left.stick_x = e.value; break;
         case ABS_Y: kp->left.stick_y = e.value; break;
         case ABS_Z: kp->left.trigger = e.value; break;
@@ -328,8 +353,8 @@ int kp_getkey_press(struct kp_ctx *kp, enum kp_key key) {
 }
 
 void kp_getpos_mouse(struct kp_ctx *kp, int32_t *out_x, int32_t *out_y) {
-  if (out_x) *out_x = kp->mouse.x;
-  if (out_y) *out_y = kp->mouse.y;
+  if (out_x) *out_x = kp->mouse.dx;
+  if (out_y) *out_y = kp->mouse.dy;
 }
 
 void kp_getpos_analogs(

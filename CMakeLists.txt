@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0.0 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.13.0 FATAL_ERROR)
 project(blur LANGUAGES C)
 
 set(PLATFORM_DEFINITION "-DPLATFORM_LINUX")
@@ -8,6 +8,7 @@ set(EXTLIBS)
 find_library(XAU NAMES "Xau" PATHS "./libs" NO_DEFAULT_PATH)
 find_library(XDMCP NAMES "Xdmcp" PATHS "./libs" NO_DEFAULT_PATH)
 find_library(XCB NAMES "xcb" PATHS "./libs" NO_DEFAULT_PATH)
+find_library(XCB_SHM NAMES "xcb-shm" PATHS "./libs" NO_DEFAULT_PATH)
 if (NOT XAU)
   message(FATAL_ERROR "Could not find libXau")
 endif()
@@ -17,8 +18,15 @@ endif()
 if (NOT XCB)
   message(FATAL_ERROR "Could not find libxcb")
 endif()
+if (NOT XCB_SHM)
+  message(FATAL_ERROR "Could not find libxcb-shm")
+endif()
 # order is important here to make sure we don't have missing symbols
-list(APPEND EXTLIBS ${XCB} ${XDMCP} ${XAU})
+list(APPEND EXTLIBS
+  "-Wl,--start-group"
+  ${XAU} ${XDMCP} ${XCB} ${XCB_SHM}
+  "-Wl,--end-group"
+  )
 
 ## Sources
 set(PLATFORM_SOURCES
@@ -27,6 +35,8 @@ set(PLATFORM_SOURCES
   )
 set(SOURCES
   "src/blur.c"
+  "src/xrand.c"
+  "src/render_sw.c"
   )
 
 add_executable(blur ${SOURCES} ${PLATFORM_SOURCES})

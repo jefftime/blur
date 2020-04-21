@@ -1,0 +1,1 @@
+ninja -C bin clean
