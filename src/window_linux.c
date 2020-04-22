@@ -200,6 +200,7 @@ void window_update(struct window *w) {
       if ((e->width != w->width) || (e->height != w->height)) {
         w->width = e->width;
         w->height = e->height;
+        memset(w->shm_data, 0, w->width * w->height * sizeof(uint32_t));
       }
       break;
     }

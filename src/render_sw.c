@@ -9,8 +9,6 @@ struct render {
   struct window *window;
   uint16_t width;
   uint16_t height;
-  uint16_t window_width;
-  uint16_t window_height;
   uint32_t *palette;
   unsigned char *scr;
 };
@@ -39,12 +37,25 @@ uint32_t *init_palette(void) {
 }
 
 static void scale_centered(struct render *r) {
+  unsigned char width_scale, height_scale, scale;
+  uint16_t window_width, window_height;
   uint32_t *buf;
-  size_t i;
+  size_t i, j, s1, s2;
 
+  window_dimensions(r->window, &window_width, &window_height);
+  width_scale = window_width / r->width;
+  height_scale = window_height / r->height;
+  scale = width_scale < height_scale ? width_scale : height_scale;
   buf = window_buffer(r->window);
-  for (i = 0; i < r->width * r->height; ++i) {
-    buf[i] = r->palette[r->scr[i]];
+  for (i = 0; i < r->height; ++i) {
+    for (s1 = 0; s1 < scale; ++s1) {
+      for (j = 0; j < r->width; ++j) {
+        for (s2 = 0; s2 < scale; ++s2) {
+          *buf++ = r->palette[r->scr[(i * r->width) + j]];
+        }
+      }
+      buf += window_width - (r->width * scale);
+    }
   }
 }
 
@@ -59,11 +70,8 @@ struct render *render_new(struct window *w) {
   out = malloc(sizeof(struct render));
   if (!out) return NULL;
   memset(out, 0, sizeof(struct render));
-  window_dimensions(w, &window_width, window_height);
   out->window = w;
   out->palette = init_palette();
-  out->window_width = window_width;
-  out->window_height = window_height;
   if (!out->palette) goto err;
   return out;
 
@@ -79,21 +87,22 @@ void render_del(struct render *r) {
 }
 
 int render_configure(struct render *r, uint16_t width, uint16_t height) {
+  size_t i;
+
   if (!r) return -1;
   if (r->scr) free(r->scr);
   r->width = width;
   r->height = height;
   r->scr = malloc(width * height);
   if (!r->scr) return -1;
+  for (i = 0; i < r->width * r->height; ++i) {
+    r->scr[i] = (unsigned char) (xrand() % 256);
+  }
   return 0;
 }
 
 void render_update(struct render *r) {
-  size_t i, j;
 
-  for (i = 0; i < r->width * r->height; ++i) {
-    r->scr[i] = (unsigned char) (xrand() % 256);
-  }
   scale_centered(r);
   window_draw(r->window);
 }
