@@ -1,24 +1,15 @@
 #include "window.h"
 #include "sized_types.h"
+#include "error.h"
 #include <stdlib.h>
 #include <string.h>
-#include <sys/shm.h>
-#include <sys/types.h>
 #include <xcb/xcb.h>
-#include <xcb/shm.h>
-
-enum {
-  MAX_WIDTH = 1920,
-  MAX_HEIGHT = 1080
-};
 
 struct window {
   char *title;
   uint16_t width;
   uint16_t height;
   unsigned char should_close;
-  int shmid;
-  uint32_t *shm_data;
 
   /* xcb */
   xcb_connection_t *cn;
@@ -27,7 +18,6 @@ struct window {
   xcb_screen_t *screen;
   xcb_setup_t *setup;
   xcb_atom_t win_delete;
-  xcb_shm_seg_t shm_seg;
 };
 
 static int setup_connection(struct window *w) {
@@ -35,7 +25,7 @@ static int setup_connection(struct window *w) {
   xcb_screen_iterator_t screen_iter;
 
   w->cn = xcb_connect(NULL, &screen_index);
-  if (!w->cn) return -1;
+  if (!w->cn) return WINDOW_ERROR_CONNECTION;
   w->setup = (xcb_setup_t *) xcb_get_setup(w->cn);
   screen_iter = xcb_setup_roots_iterator(w->setup);
   /* get selected screen index information */
@@ -94,10 +84,10 @@ static int setup_window(struct window *w) {
   );
   protocol = xcb_intern_atom_reply(w->cn, protocol_ck, NULL);
   delete = xcb_intern_atom_reply(w->cn, delete_ck, NULL);
-  if (!protocol) return -1;
+  if (!protocol) return WINDOW_ERROR_INTERN_ATOM;
   if (!delete) {
     free(protocol);
-    return -1;
+    return WINDOW_ERROR_INTERN_ATOM;
   }
   xcb_change_property(
     w->cn,
@@ -130,17 +120,10 @@ static int setup_gc(struct window *w) {
   return 0;
 }
 
-static int setup_shm(struct window *w) {
-  w->shm_seg = xcb_generate_id(w->cn);
-  xcb_shm_attach(w->cn, w->shm_seg, (uint32_t) w->shmid, 0);
-  return 0;
-}
-
 static int init_xcb(struct window *w) {
-  if (setup_connection(w)) return -1;
-  if (setup_window(w)) return -1;
-  if (setup_gc(w)) return -1;
-  if (setup_shm(w)) return -1;
+  chkerr(setup_connection(w));
+  chkerr(setup_window(w));
+  chkerr(setup_gc(w));
   xcb_flush(w->cn);
   return 0;
 }
@@ -158,14 +141,6 @@ struct window *window_new(char *title, uint16_t width, uint16_t height) {
   out->title = title;
   out->width = width;
   out->height = height;
-  out->shmid = shmget(
-    IPC_PRIVATE,
-    MAX_WIDTH * MAX_HEIGHT * sizeof(uint32_t),
-    IPC_CREAT | 0666
-  );
-  if (out->shmid < 0) goto err;
-  out->shm_data = (uint32_t *) shmat(out->shmid, NULL, 0);
-  if ((int) out->shm_data == -1) goto err;
   if (init_xcb(out)) goto err;
   out->should_close = 0;
   return out;
@@ -178,11 +153,9 @@ struct window *window_new(char *title, uint16_t width, uint16_t height) {
 void window_del(struct window *w) {
   if (!w) return;
 
-  xcb_shm_detach(w->cn, w->shm_seg);
   xcb_destroy_window(w->cn, w->wn);
   xcb_flush(w->cn);
   xcb_disconnect(w->cn);
-  shmdt(w->shm_data);
   free(w);
 }
 
@@ -200,7 +173,6 @@ void window_update(struct window *w) {
       if ((e->width != w->width) || (e->height != w->height)) {
         w->width = e->width;
         w->height = e->height;
-        memset(w->shm_data, 0, w->width * w->height * sizeof(uint32_t));
       }
       break;
     }
@@ -238,31 +210,9 @@ void window_dimensions(
   if (out_height) *out_height = w->height;
 }
 
-uint32_t *window_buffer(struct window *w) {
-  return w->shm_data;
-}
-
-void window_draw(struct window *w) {
-  xcb_shm_put_image(
-    w->cn,
-    w->wn,
-    w->gc,
-    w->width, w->height,
-    0, 0,
-    w->width, w->height,
-    0, 0,
-    w->screen->root_depth,      /* depth */
-    XCB_IMAGE_FORMAT_Z_PIXMAP,  /* format */
-    0,                          /* send_event */
-    w->shm_seg,
-    0                           /* offset */
-  );
-  xcb_flush(w->cn);
-}
-
 int window_get_os_details(struct window *w, struct window_os_details *out) {
-  if (!w) return -1;
-  if (!out) return -1;
+  if (!w) return WINDOW_ERROR_NULL;
+  if (!out) return WINDOW_ERROR_NULL;
 
   out->cn = w->cn;
   out->wn = w->wn;

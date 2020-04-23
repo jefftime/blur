@@ -32,6 +32,7 @@ uint32_t *init_palette(void) {
     palette[i] |= (uint32_t) r << 16;
     palette[i] |= (uint32_t) g << 8;
     palette[i] |= (uint32_t) b;
+    palette[i] = (i << 16) | (i << 8) | i;
   }
   return palette;
 }
@@ -40,6 +41,7 @@ static void scale_centered(struct render *r) {
   unsigned char width_scale, height_scale, scale;
   uint16_t window_width, window_height;
   uint32_t *buf;
+  int32_t horiz_offset, vert_offset;
   size_t i, j, s1, s2;
 
   window_dimensions(r->window, &window_width, &window_height);
@@ -47,6 +49,9 @@ static void scale_centered(struct render *r) {
   height_scale = window_height / r->height;
   scale = width_scale < height_scale ? width_scale : height_scale;
   buf = window_buffer(r->window);
+  horiz_offset = (window_width - (r->width * scale)) / 2;
+  vert_offset = (window_width) * ((window_height - (r->height * scale)) / 2);
+  buf += horiz_offset + vert_offset;
   for (i = 0; i < r->height; ++i) {
     for (s1 = 0; s1 < scale; ++s1) {
       for (j = 0; j < r->width; ++j) {
@@ -102,7 +107,6 @@ int render_configure(struct render *r, uint16_t width, uint16_t height) {
 }
 
 void render_update(struct render *r) {
-
   scale_centered(r);
   window_draw(r->window);
 }

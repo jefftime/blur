@@ -8,7 +8,6 @@ set(EXTLIBS)
 find_library(XAU NAMES "Xau" PATHS "./libs" NO_DEFAULT_PATH)
 find_library(XDMCP NAMES "Xdmcp" PATHS "./libs" NO_DEFAULT_PATH)
 find_library(XCB NAMES "xcb" PATHS "./libs" NO_DEFAULT_PATH)
-find_library(XCB_SHM NAMES "xcb-shm" PATHS "./libs" NO_DEFAULT_PATH)
 if (NOT XAU)
   message(FATAL_ERROR "Could not find libXau")
 endif()
@@ -18,13 +17,10 @@ endif()
 if (NOT XCB)
   message(FATAL_ERROR "Could not find libxcb")
 endif()
-if (NOT XCB_SHM)
-  message(FATAL_ERROR "Could not find libxcb-shm")
-endif()
 # order is important here to make sure we don't have missing symbols
 list(APPEND EXTLIBS
   "-Wl,--start-group"
-  ${XAU} ${XDMCP} ${XCB} ${XCB_SHM}
+  ${XAU} ${XDMCP} ${XCB}
   "-Wl,--end-group"
   )
 
@@ -36,7 +32,7 @@ set(PLATFORM_SOURCES
 set(SOURCES
   "src/blur.c"
   "src/xrand.c"
-  "src/render_sw.c"
+  "src/render_vk.c"
   )
 
 add_executable(blur ${SOURCES} ${PLATFORM_SOURCES})
