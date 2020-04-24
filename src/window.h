@@ -14,7 +14,6 @@ struct window_os_details {
 
 struct window;
 
-
 #define WINDOW_ERROR_NULL -1
 #define WINDOW_ERROR_CONNECTION -2
 #define WINDOW_ERROR_INTERN_ATOM -3

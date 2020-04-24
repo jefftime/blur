@@ -1,9 +1,8 @@
 cmake_minimum_required(VERSION 3.13.0 FATAL_ERROR)
 project(blur LANGUAGES C)
 
-set(PLATFORM_DEFINITION "-DPLATFORM_LINUX")
-set(RENDER_BACKEND "SW")
-
+option(PLATFORM "Set the platform build target" "Linux")
+option(RENDER_BACKEND "Set the renderer backend" "VK")
 
 ## External libraries
 set(EXTLIBS)
@@ -30,11 +29,16 @@ list(APPEND EXTLIBS
   "-Wl,--end-group"
   )
 
+## Platform specific settings
+if (PLATFORM MATCHES "Linux")
+  set(PLATFORM_DEFINITION "-DPLATFORM_LINUX")
+  set(PLATFORM_SOURCES
+    "src/window_linux.c"
+    "src/keypoll_linux.c"
+    )
+endif()
+
 ## Sources
-set(PLATFORM_SOURCES
-  "src/window_linux.c"
-  "src/keypoll_linux.c"
-  )
 set(SOURCES
   "src/blur.c"
   "src/xrand.c"
