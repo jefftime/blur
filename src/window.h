@@ -21,7 +21,7 @@ struct window;
 
 /* **************************************** */
 /* window_<platform>.c */
-struct window *window_new(char *, uint16_t, uint16_t);
+struct window *window_new(char *, uint16_t, uint16_t, int *);
 void window_del(struct window *);
 void window_update(struct window *);
 void window_close(struct window *);

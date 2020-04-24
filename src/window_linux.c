@@ -132,7 +132,13 @@ static int init_xcb(struct window *w) {
 /* Public */
 /* **************************************** */
 
-struct window *window_new(char *title, uint16_t width, uint16_t height) {
+struct window *window_new(
+  char *title,
+  uint16_t width,
+  uint16_t height,
+  int *err
+) {
+  int rc = 0;
   struct window *out;
 
   out = malloc(sizeof(struct window));
@@ -141,12 +147,13 @@ struct window *window_new(char *title, uint16_t width, uint16_t height) {
   out->title = title;
   out->width = width;
   out->height = height;
-  if (init_xcb(out)) goto err;
+  if ((rc = init_xcb(out))) goto err;
   out->should_close = 0;
   return out;
 
  err:
-  free(out);
+  if (out) free(out);
+  if (err) *err = rc;
   return NULL;
 }
 

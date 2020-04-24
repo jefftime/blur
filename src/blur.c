@@ -19,11 +19,11 @@ int main(int argc, char **argv) {
   struct render *r = NULL;
 
   XRAND_SEED = (uint64_t) time(NULL);
-  w = window_new("Test", width, height);
+  w = window_new("Blur", width, height, NULL);
   if (!w) goto err;
   kp = kp_new();
   if (!kp) goto err;
-  r = render_new(w);
+  r = render_new(w, NULL);
   if (!r) goto err;
   render_configure(r, render_width, render_height);
   for (;;) {
