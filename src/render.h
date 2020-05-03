@@ -50,6 +50,8 @@ struct render;
 #define RENDER_ERROR_VULKAN_QUEUE_SUBMIT -41
 #define RENDER_ERROR_VULKAN_QUEUE_PRESENT -42
 #define RENDER_ERROR_VULKAN_ENUMERATE_INSTANCE_EXTENSIONS -43
+#define RENDER_ERROR_VULKAN_ENUMERATE_SUPPORTED_EXTENSIONS -44
+#define RENDER_ERROR_VULKAN_UNSUPPORTED_EXTENSION -45
 
 /* **************************************** */
 /* render_<backend>.c */
@@ -57,6 +59,13 @@ struct render *render_new(struct window *, int *);
 void render_del(struct render *);
 int render_configure(struct render *, uint16_t, uint16_t);
 void render_update(struct render *);
+/* **************************************** */
+
+/* **************************************** */
+/* render_<backend>_pipeline.c */
+struct render_pipeline *render_create_pipeline(struct render *);
+struct render_pipeline *render_create_pipelines(struct render *, size_t);
+void render_del_pipeline(struct render_pipeline *r);
 /* **************************************** */
 
 #endif
