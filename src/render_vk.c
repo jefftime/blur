@@ -12,25 +12,6 @@
 #define LIBNAME "libvulkan.so"
 #endif  /* PLATFORM_LINUX */
 
-#define vkfunc(F) PFN_vk##F F
-
-struct vk_functions {
-  vkfunc(GetInstanceProcAddr);
-  vkfunc(CreateInstance);
-  vkfunc(DestroyInstance);
-  vkfunc(EnumerateInstanceExtensionProperties);
-  vkfunc(GetDeviceProcAddr);
-  vkfunc(EnumeratePhysicalDevices);
-};
-
-struct render {
-  void *vklib;
-  struct vk_functions vk;
-  VkInstance instance;
-  uint32_t n_devices;
-  VkPhysicalDevice *phys_devices;
-};
-
 static int load_vulkan(struct render *r) {
   /*
    * WARNING: This won't work on systems where object pointers and function
@@ -155,45 +136,33 @@ static int get_devices(struct render *r) {
 /* Public */
 /* **************************************** */
 
-struct render *render_new(struct window *w, int *out_err) {
-#define chk(expr) if ((expr)) goto err
-
+int render_init(struct render *r, struct window *w) {
   char *inst_exts[] = {
     "VK_KHR_surface",
 #if PLATFORM_LINUX
     "VK_KHR_xcb_surface"
-#endif
+#endif  /* PLATFORM_LINUX */
   };
 
-  int rc;
   size_t n_inst_exts;
-  struct render *out;
 
-  out = malloc(sizeof(struct render));
-  if (!out) return NULL;
-  memset(out, 0, sizeof(struct render));
+  if (!r) return RENDER_ERROR_NULL;
+  if (!w) return RENDER_ERROR_NULL;
+  memset(r, 0, sizeof(struct render));
   n_inst_exts = sizeof(inst_exts) / sizeof(inst_exts[0]);
-  chk(rc = load_vulkan(out));
-  chk(rc = load_preinstance_functions(out));
-  chk(rc = check_instance_extensions(out, n_inst_exts, inst_exts));
-  chk(rc = create_instance(out, n_inst_exts, inst_exts));
-  chk(rc = load_instance_functions(out));
-  chk(rc = get_devices(out));
-  return out;
-
- err:
-  render_del(out);
-  if (out_err) *out_err = rc;
-  return NULL;
-
-#undef chk
+  chkerr(load_vulkan(r));
+  chkerr(load_preinstance_functions(r));
+  chkerr(check_instance_extensions(r, n_inst_exts, inst_exts));
+  chkerr(create_instance(r, n_inst_exts, inst_exts));
+  chkerr(load_instance_functions(r));
+  chkerr(get_devices(r));
+  return RENDER_ERROR_NONE;
 }
 
-void render_del(struct render *r) {
+void render_deinit(struct render *r) {
   if (!r) return;
   r->vk.DestroyInstance(r->instance, NULL);
   dlclose(r->vklib);
-  free(r);
 }
 
 struct render_pipeline *render_create_pipeline(struct render *r) {

@@ -1,4 +1,5 @@
 #include "keypoll.h"
+#include "error.h"
 #include "sized_types.h"
 #include <linux/input.h>
 #include <dirent.h>
@@ -7,41 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-enum {
-  MAX_DEVICES = 32,
-  MAX_MT_SLOTS = 12
-};
-
-struct kp_ctx {
-  size_t n_devices;
-  int fds[MAX_DEVICES];
-  unsigned char keymap[KP_MAX_KEYS];
-  struct {
-    long active_slot;
-    struct {
-      int32_t id;
-      int32_t x;
-      int32_t y;
-      int32_t prev_x;
-      int32_t prev_y;
-    } slots[MAX_MT_SLOTS];
-  } mt;
-  struct {
-    int32_t dx;
-    int32_t dy;
-  } mouse;
-  struct {
-    int32_t stick_x;
-    int32_t stick_y;
-    int32_t trigger;
-  } left;
-  struct {
-    int32_t stick_x;
-    int32_t stick_y;
-    int32_t trigger;
-  } right;
-};
 
 size_t get_key_index(int code) {
   switch (code) {
@@ -191,7 +157,7 @@ size_t get_key_index(int code) {
   return KP_KEY_BLANK;
 }
 
-int supported_device(char *name) {
+static int supported_device(char *name) {
   char *supported_devices[] = {
     "event-kbd",
     "event-mouse",
@@ -212,7 +178,7 @@ int supported_device(char *name) {
   return 0;
 }
 
-int process_devices(struct kp_ctx *kp, size_t n_devices, char **devices) {
+static int process_devices(struct kp_ctx *kp, size_t n_devices, char **devices) {
   enum {
     filepath_end = 19
   };
@@ -223,21 +189,21 @@ int process_devices(struct kp_ctx *kp, size_t n_devices, char **devices) {
   kp->n_devices = n_devices;
   for (i = 0; i < n_devices; ++i) {
     strcat(filepath, devices[i]);
-    kp->fds[i] = open(filepath, O_RDONLY | O_NONBLOCK);
+    kp->os.fds[i] = open(filepath, O_RDONLY | O_NONBLOCK);
     /* we're going to reuse filepath for each device */
     filepath[filepath_end] = '\0';
-    if (kp->fds[i] < 0) goto err;
+    if (kp->os.fds[i] < 0) goto err;
     continue;
 
   err:
     /* close all previous file descriptors */
-    while (i--) close(kp->fds[i]);
+    while (i--) close(kp->os.fds[i]);
     return -1;
   }
   return 0;
 }
 
-void update_states(struct kp_ctx *kp) {
+static void update_states(struct kp_ctx *kp) {
   size_t i;
 
   /* advance the state from KP_STATE_PRESSED to KP_STATE_HELD */
@@ -246,7 +212,7 @@ void update_states(struct kp_ctx *kp) {
   }
 }
 
-void set_keymap(struct kp_ctx *kp, int code, int value) {
+static void set_keymap(struct kp_ctx *kp, int code, int value) {
   /*
    * On Linux, key repeat events are 2 which is the same as
    * our KP_STATE_PRESSED, so we don't have to filter them out
@@ -259,37 +225,31 @@ void set_keymap(struct kp_ctx *kp, int code, int value) {
 /* Public */
 /* **************************************** */
 
-struct kp_ctx *kp_new(void) {
-  char *devices[MAX_DEVICES] = { 0 };
+int kp_init(struct kp_ctx *kp) {
+  char *devices[KEYPOLL_MAX_DEVICES] = { 0 };
   size_t n_devices = 0;
   DIR *input_dir = NULL;
   struct dirent *input = NULL;
-  struct kp_ctx *kp;
 
-  kp = malloc(sizeof(struct kp_ctx));
-  if (!kp) return NULL;
-  input_dir = opendir("/dev/input/by-path");
-  if (!input_dir) goto err;
+  if (!kp) return KEYPOLL_ERROR_NULL;
+  input_dir = opendir("/dev/input/by-path/");
+  if (!input_dir) return KEYPOLL_ERROR_INVALID_DIR;
   while ((input = readdir(input_dir))) {
     if (!supported_device(input->d_name)) continue;
-    if (n_devices >= MAX_DEVICES) break;
+    if (n_devices >= KEYPOLL_MAX_DEVICES) break;
     devices[n_devices++] = input->d_name;
   }
-  if (process_devices(kp, n_devices, devices)) goto err;
+  chkerr(process_devices(kp, n_devices, devices));
   closedir(input_dir);
-  return kp;
-
- err:
-  free(kp);
-  return NULL;
+  kp->n_devices = n_devices;
+  return KEYPOLL_ERROR_NONE;
 }
 
-void kp_del(struct kp_ctx *kp) {
+void kp_deinit(struct kp_ctx *kp) {
   size_t i;
 
   if (!kp) return;
-  for (i = 0; i < kp->n_devices; ++i) close(kp->fds[i]);
-  free(kp);
+  for (i = 0; i < kp->n_devices; ++i) close(kp->os.fds[i]);
 }
 
 void kp_update(struct kp_ctx *kp) {
@@ -301,7 +261,7 @@ void kp_update(struct kp_ctx *kp) {
     ssize_t rc;
     struct input_event e;
 
-    while ((rc = read(kp->fds[i], &e, sizeof(struct input_event))) > 0) {
+    while ((rc = read(kp->os.fds[i], &e, sizeof(struct input_event))) > 0) {
       switch (e.type) {
       case EV_KEY:
         set_keymap(kp, e.code, e.value);
@@ -341,35 +301,4 @@ void kp_update(struct kp_ctx *kp) {
       }
     }
   }
-}
-
-int kp_getkey(struct kp_ctx *kp, enum kp_key key) {
-  /* no null check */
-  return kp->keymap[key];
-}
-
-int kp_getkey_press(struct kp_ctx *kp, enum kp_key key) {
-  return kp_getkey(kp, key) == KP_STATE_PRESSED;
-}
-
-void kp_getpos_mouse(struct kp_ctx *kp, int32_t *out_x, int32_t *out_y) {
-  if (out_x) *out_x = kp->mouse.dx;
-  if (out_y) *out_y = kp->mouse.dy;
-}
-
-void kp_getpos_analogs(
-  struct kp_ctx *kp,
-  int32_t *out_x,
-  int32_t *out_y,
-  int32_t *out_z,
-  int32_t *out_rx,
-  int32_t *out_ry,
-  int32_t *out_rz
-) {
-  if (out_x) *out_x = kp->left.stick_x;
-  if (out_y) *out_y = kp->left.stick_y;
-  if (out_z) *out_z = kp->left.trigger;
-  if (out_rx) *out_rx = kp->right.stick_x;
-  if (out_ry) *out_ry = kp->right.stick_y;
-  if (out_rz) *out_rz = kp->right.trigger;
 }

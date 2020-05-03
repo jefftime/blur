@@ -4,7 +4,26 @@
 #include "sized_types.h"
 #include "window.h"
 
-struct render;
+#include <vulkan/vulkan_core.h>
+
+#define vkfunc(F) PFN_vk##F F
+struct vk_functions {
+  vkfunc(GetInstanceProcAddr);
+  vkfunc(CreateInstance);
+  vkfunc(DestroyInstance);
+  vkfunc(EnumerateInstanceExtensionProperties);
+  vkfunc(GetDeviceProcAddr);
+  vkfunc(EnumeratePhysicalDevices);
+};
+#undef vkfunc
+
+struct render {
+  void *vklib;
+  struct vk_functions vk;
+  VkInstance instance;
+  uint32_t n_devices;
+  VkPhysicalDevice *phys_devices;
+};
 
 #define RENDER_ERROR_NONE 0
 #define RENDER_ERROR_MEMORY -1
@@ -55,17 +74,14 @@ struct render;
 
 /* **************************************** */
 /* render_<backend>.c */
-struct render *render_new(struct window *, int *);
-void render_del(struct render *);
+int render_init(struct render *, struct window *);
+void render_deinit(struct render *);
 int render_configure(struct render *, uint16_t, uint16_t);
 void render_update(struct render *);
 /* **************************************** */
 
 /* **************************************** */
 /* render_<backend>_pipeline.c */
-struct render_pipeline *render_create_pipeline(struct render *);
-struct render_pipeline *render_create_pipelines(struct render *, size_t);
-void render_del_pipeline(struct render_pipeline *r);
 /* **************************************** */
 
 #endif

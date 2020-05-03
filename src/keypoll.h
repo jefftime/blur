@@ -2,6 +2,19 @@
 #define KEYPOLL_H
 
 #include "sized_types.h"
+#include <stddef.h>
+
+#define kp_getkey(ctx, k) ((ctx).keymap[(k)])
+#define kp_getkey_press(ctx, k) ((ctx).keymap[(k)] == KP_STATE_PRESSED)
+
+#define KEYPOLL_ERROR_NONE 0
+#define KEYPOLL_ERROR_NULL -1
+#define KEYPOLL_ERROR_INVALID_DIR -2
+
+enum {
+  KEYPOLL_MAX_DEVICES = 32,
+  KEYPOLL_MAX_MT_SLOTS = 12
+};
 
 struct kp_ctx;
 
@@ -159,20 +172,53 @@ enum kp_key {
   KP_MAX_KEYS
 };
 
-struct kp_ctx *kp_new(void);
-void kp_del(struct kp_ctx *);
-void kp_update(struct kp_ctx *);
-int kp_getkey(struct kp_ctx *kp, enum kp_key key);
-int kp_getkey_press(struct kp_ctx *kp, enum kp_key key);
-void kp_getpos_mouse(struct kp_ctx *kp, int32_t *out_x, int32_t *out_y);
-void kp_getpos_analogs(
-  struct kp_ctx *kp,
-  int32_t *out_x,
-  int32_t *out_y,
-  int32_t *out_z,
-  int32_t *out_rx,
-  int32_t *out_ry,
-  int32_t *out_rz
-);
+#if PLATFORM_LINUX
+
+struct kp_os_details {
+  int fds[KEYPOLL_MAX_DEVICES];
+};
+
+#else
+
+struct kp_os_details {
+  int dummy;
+};
+
+#endif  /* PLATFORM_LINUX */
+
+struct kp_ctx {
+  size_t n_devices;
+  unsigned char keymap[KP_MAX_KEYS];
+  struct {
+    long active_slot;
+    struct {
+      int32_t id;
+      int32_t x;
+      int32_t y;
+      int32_t prev_x;
+      int32_t prev_y;
+    } slots[KEYPOLL_MAX_MT_SLOTS];
+  } mt;
+  struct {
+    int32_t dx;
+    int32_t dy;
+  } mouse;
+  struct {
+    int32_t stick_x;
+    int32_t stick_y;
+    int32_t trigger;
+  } left;
+  struct {
+    int32_t stick_x;
+    int32_t stick_y;
+    int32_t trigger;
+  } right;
+  struct kp_os_details os;
+};
+
+
+int kp_init(struct kp_ctx *kp);
+void kp_deinit(struct kp_ctx *kp);
+void kp_update(struct kp_ctx *kp);
 
 #endif
