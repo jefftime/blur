@@ -250,6 +250,7 @@ int kp_init(struct kp_ctx *kp) {
   struct dirent *input = NULL;
 
   if (!kp) return KEYPOLL_ERROR_NULL;
+  memset(kp, 0, sizeof(struct kp_ctx));
   input_dir = opendir("/dev/input/by-path/");
   if (!input_dir) return KEYPOLL_ERROR_INVALID_DIR;
   while ((input = readdir(input_dir))) {
