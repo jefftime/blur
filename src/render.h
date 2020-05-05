@@ -22,26 +22,9 @@
 #include "sized_types.h"
 #include "window.h"
 
-#include <vulkan/vulkan_core.h>
-
-#define vkfunc(F) PFN_vk##F F
-struct vk_functions {
-  vkfunc(GetInstanceProcAddr);
-  vkfunc(CreateInstance);
-  vkfunc(DestroyInstance);
-  vkfunc(EnumerateInstanceExtensionProperties);
-  vkfunc(GetDeviceProcAddr);
-  vkfunc(EnumeratePhysicalDevices);
-};
-#undef vkfunc
-
-struct render {
-  void *vklib;
-  struct vk_functions vk;
-  VkInstance instance;
-  uint32_t n_devices;
-  VkPhysicalDevice *phys_devices;
-};
+#ifdef PLATFORM_LINUX
+#include "render_vk.h"
+#endif  /* PLATFORM_LINUX */
 
 #define RENDER_ERROR_NONE 0
 #define RENDER_ERROR_MEMORY -1
@@ -92,14 +75,21 @@ struct render {
 
 /* **************************************** */
 /* render_<backend>.c */
-int render_init(struct render *, struct window *);
-void render_deinit(struct render *);
-int render_configure(struct render *, uint16_t, uint16_t);
-void render_update(struct render *);
+int render_init(struct render *r, struct window *w);
+void render_deinit(struct render *r);
+void render_update(struct render *r);
 /* **************************************** */
 
 /* **************************************** */
 /* render_<backend>_pipeline.c */
+int render_init_pipeline(
+  struct render_pipeline *rp,
+  struct render *r,
+  size_t device,
+  uint16_t width,
+  uint16_t height
+);
+void render_deinit_pipeline(struct render_pipeline *rp);
 /* **************************************** */
 
 #endif

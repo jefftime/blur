@@ -51,17 +51,17 @@ static int load_vulkan(struct render *r) {
   dlsym_result.ptr = dlsym(r->vklib, "vkGetInstanceProcAddr");
 #endif
 
-  r->vk.GetInstanceProcAddr = dlsym_result.func;
+  vkGetInstanceProcAddr = dlsym_result.func;
   return RENDER_ERROR_NONE;
 }
 
 static int load_preinstance_functions(struct render *r) {
 #define load(F) \
-  if (!(r->vk.F = (PFN_vk##F) r->vk.GetInstanceProcAddr(NULL, "vk" #F))) \
+  if (!(F = (PFN_##F) vkGetInstanceProcAddr(NULL, #F))) \
     return RENDER_ERROR_VULKAN_PREINST_LOAD
 
-  load(CreateInstance);
-  load(EnumerateInstanceExtensionProperties);
+  load(vkCreateInstance);
+  load(vkEnumerateInstanceExtensionProperties);
   return RENDER_ERROR_NONE;
 
 #undef load
@@ -77,7 +77,7 @@ static int check_instance_extensions(
   VkExtensionProperties *supported_exts;
   VkResult result;
 
-  result = r->vk.EnumerateInstanceExtensionProperties(
+  result = vkEnumerateInstanceExtensionProperties(
     NULL,
     &n_supported_exts,
     NULL
@@ -88,7 +88,7 @@ static int check_instance_extensions(
   if (!n_supported_exts) return 0;
   supported_exts = malloc(n_supported_exts * sizeof(VkExtensionProperties));
   if (!supported_exts) return RENDER_ERROR_MEMORY;
-  r->vk.EnumerateInstanceExtensionProperties(
+  vkEnumerateInstanceExtensionProperties(
     NULL,
     &n_supported_exts,
     supported_exts
@@ -113,35 +113,58 @@ static int create_instance(struct render *r, size_t n_exts, char **exts) {
   create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
   create_info.enabledExtensionCount = (uint32_t) n_exts;
   create_info.ppEnabledExtensionNames = (const char *const *) exts;
-  result = r->vk.CreateInstance(&create_info, NULL, &r->instance);
+  result = vkCreateInstance(&create_info, NULL, &r->instance);
   if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_INSTANCE;
   return RENDER_ERROR_NONE;
 }
 
 static int load_instance_functions(struct render *r) {
 #define load(F) \
-  if (!(r->vk.F = (PFN_vk##F) r->vk.GetInstanceProcAddr(r->instance, "vk" #F))) \
+  if (!(F = (PFN_##F) vkGetInstanceProcAddr(r->instance, #F))) \
     return RENDER_ERROR_VULKAN_INSTANCE_FUNC_LOAD
 
-  load(GetDeviceProcAddr);
-  load(DestroyInstance);
-  load(EnumeratePhysicalDevices);
+  load(vkGetDeviceProcAddr);
+  load(vkDestroyInstance);
+  load(vkEnumeratePhysicalDevices);
+  load(vkGetPhysicalDeviceQueueFamilyProperties);
+  load(vkGetPhysicalDeviceSurfaceSupportKHR);
+  load(vkDestroySurfaceKHR);
+#if PLATFORM_LINUX
+  load(vkCreateXcbSurfaceKHR);
+#endif  /* PLATFORM_LINUX */
   return RENDER_ERROR_NONE;
 
 #undef load
+}
+
+static int create_surface(struct render *r, struct window *w) {
+  VkXcbSurfaceCreateInfoKHR create_info = { 0 };
+  VkResult result;
+
+  create_info.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
+  create_info.connection = w->os.cn;
+  create_info.window = w->os.wn;
+  result = vkCreateXcbSurfaceKHR(
+    r->instance,
+    &create_info,
+    NULL,
+    &r->surface
+  );
+  if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_SURFACE;
+  return RENDER_ERROR_NONE;
 }
 
 static int get_devices(struct render *r) {
   uint32_t n_devices;
   VkResult result;
 
-  result = r->vk.EnumeratePhysicalDevices(r->instance, &n_devices, NULL);
+  result = vkEnumeratePhysicalDevices(r->instance, &n_devices, NULL);
   if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_PHYSICAL_DEVICE;
   if (n_devices == 0) return RENDER_ERROR_VULKAN_NO_DEVICES;
   r->n_devices = n_devices;
   r->phys_devices = malloc(sizeof(VkPhysicalDevice) * n_devices);
   if (!r->phys_devices) return RENDER_ERROR_MEMORY;
-  result = r->vk.EnumeratePhysicalDevices(
+  result = vkEnumeratePhysicalDevices(
     r->instance,
     &n_devices,
     r->phys_devices
@@ -173,22 +196,20 @@ int render_init(struct render *r, struct window *w) {
   chkerr(check_instance_extensions(r, n_inst_exts, inst_exts));
   chkerr(create_instance(r, n_inst_exts, inst_exts));
   chkerr(load_instance_functions(r));
+  chkerr(create_surface(r, w));
   chkerr(get_devices(r));
   return RENDER_ERROR_NONE;
 }
 
 void render_deinit(struct render *r) {
   if (!r) return;
-  r->vk.DestroyInstance(r->instance, NULL);
+  vkDestroySurfaceKHR(r->instance, r->surface, NULL);
+  vkDestroyInstance(r->instance, NULL);
   dlclose(r->vklib);
 }
 
 struct render_pipeline *render_create_pipeline(struct render *r) {
   return NULL;
-}
-
-int render_configure(struct render *r, uint16_t width, uint16_t height) {
-  return 0;
 }
 
 void render_update(struct render *r) {

@@ -59,7 +59,7 @@ set(SOURCES
   )
 
 if (RENDER_BACKEND MATCHES "vk")
-  list(APPEND SOURCES "src/render_vk.c")
+  list(APPEND SOURCES "src/render_vk.c" "src/render_vk_pipeline.c")
 endif()
 
 add_executable(blur ${SOURCES} ${PLATFORM_SOURCES})

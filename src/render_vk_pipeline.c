@@ -17,18 +17,115 @@
  */
 
 #include "render.h"
+#include "error.h"
+#include <stdlib.h>
 
-struct render_pipeline *render_create_pipeline(struct render *r) {
-  return NULL;
+static int get_queue_props(struct render_pipeline *rp) {
+  uint32_t n_props;
+
+  vkGetPhysicalDeviceQueueFamilyProperties(
+    rp->ctx->phys_devices[rp->device],
+    &n_props,
+    NULL
+  );
+  if (n_props == 0) return RENDER_ERROR_VULKAN_PHYSICAL_DEVICE;
+  rp->n_queue_props = n_props;
+  rp->queue_props = malloc(sizeof(VkQueueFamilyProperties) * n_props);
+  if (!rp->queue_props) return RENDER_ERROR_MEMORY;
+  vkGetPhysicalDeviceQueueFamilyProperties(
+    rp->ctx->phys_devices[rp->device],
+    &n_props,
+    rp->queue_props
+  );
+  return RENDER_ERROR_NONE;
 }
 
-struct render_pipeline *render_create_pipelines(
+static int get_queue_indices(struct render_pipeline *rp) {
+  int graphics_isset = 0;
+  int present_isset = 0;
+  uint32_t i;
+  VkResult result;
+
+  for (i = 0; i < rp->n_queue_props; ++i) {
+    uint32_t present_support = 0;
+
+    /* Check graphics support */
+    if (
+      (rp->queue_props[i].queueCount > 0)
+      && (rp->queue_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+    ) {
+      graphics_isset = 1;
+      rp->queue_index_graphics = i;
+    }
+    /* Check present support */
+    result = vkGetPhysicalDeviceSurfaceSupportKHR(
+      rp->ctx->phys_devices[rp->device],
+      (uint32_t) i,
+      rp->ctx->surface,
+      &present_support
+    );
+    if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_QUEUE_INDICES;
+    if ((rp->queue_props[i].queueCount > 0) && present_support) {
+      present_isset = 1;
+      rp->queue_index_present = i;
+    }
+  }
+  if (graphics_isset && present_isset) return RENDER_ERROR_NONE;
+  return RENDER_ERROR_VULKAN_QUEUE_INDICES;
+}
+
+static int create_device(struct render_pipeline *rp) {
+  return RENDER_ERROR_NONE;
+}
+
+/* **************************************** */
+/* Public */
+/* **************************************** */
+
+int render_init_pipeline(
+  struct render_pipeline *rp,
   struct render *r,
-  size_t n_pipelines
+  size_t device,
+  uint16_t width,
+  uint16_t height
 ) {
-  return NULL;
+  VkVertexInputBindingDescription bindings[] = {
+    { 0, sizeof(float) * 6, VK_VERTEX_INPUT_RATE_VERTEX }
+  };
+  VkVertexInputAttributeDescription attrs[] = {
+    { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 },
+    { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 3 }
+  };
+
+  if (!rp) return RENDER_ERROR_NULL;
+  if (!r) return RENDER_ERROR_NULL;
+  rp->ctx = r;
+  rp->device = device;
+  chkerrf(get_queue_props(rp), render_deinit_pipeline(rp));
+  chkerrf(get_queue_indices(rp), render_deinit_pipeline(rp));
+  chkerrf(create_device(rp), render_deinit_pipeline(rp));
+  /* chkerrf(load_device_functions(rp), render_deinit_pipeline(rp)); */
+  /* chkerrf(get_surface_format(r), render_deinit_pipeline(rp)); */
+  /* chkerrf(create_swapchain(r), render_deinit_pipeline(rp)); */
+  /* chkerrf( */
+  /*   create_pipeline( */
+  /*     r, */
+  /*     sizeof(bindings) / sizeof(bindings[0]), */
+  /*     bindings, */
+  /*     sizeof(attrs) / sizeof(attrs[0]), */
+  /*     attrs, */
+  /*     vshader, */
+  /*     fshader */
+  /*   ), { */
+  /*     render_deinit_pipeline(rp); */
+  /*   } */
+  /* ); */
+  /* chkerrf(create_framebuffers(r), render_deinit_pipeline(rp)); */
+  /* chkerrf(create_command_pool(r), render_deinit_pipeline(rp)); */
+  /* chkerrf(create_command_buffers(r), render_deinit_pipeline(rp)); */
+  return RENDER_ERROR_NONE;
 }
 
-void render_del_pipeline(struct render_pipeline *rp) {
-  
+void render_deinit_pipeline(struct render_pipeline *rp) {
+  free(rp->queue_props);
 }
