@@ -188,9 +188,15 @@ static int supported_device(char *name) {
   for (i = 0; i < n_devices; ++i) {
     char *device;
     int match;
+    size_t device_len;
 
     device = supported_devices[i];
-    match = !strcmp(name + (len - strlen(device)), device);
+    device_len = strlen(device);
+    if (len > device_len) {
+      match = !strcmp(name + (len - device_len), device);
+    } else {
+      match = !strcmp(name, device);
+    }
     if (match) return 1;
   }
   return 0;

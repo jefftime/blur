@@ -98,11 +98,13 @@ static int check_instance_extensions(
     for (j = 0; j < n_supported_exts; ++j) {
       if (!strcmp(supported_exts[j].extensionName, exts[i])) goto success;
     }
+    free(supported_exts);
     return RENDER_ERROR_VULKAN_UNSUPPORTED_EXTENSION;
 
   success:
     continue;
   }
+  free(supported_exts);
   return RENDER_ERROR_NONE;
 }
 
@@ -126,9 +128,12 @@ static int load_instance_functions(struct render *r) {
   load(vkGetDeviceProcAddr);
   load(vkDestroyInstance);
   load(vkEnumeratePhysicalDevices);
+  load(vkGetPhysicalDeviceProperties);
   load(vkGetPhysicalDeviceQueueFamilyProperties);
   load(vkGetPhysicalDeviceSurfaceSupportKHR);
   load(vkDestroySurfaceKHR);
+  load(vkCreateDevice);
+  load(vkGetDeviceQueue);
 #if PLATFORM_LINUX
   load(vkCreateXcbSurfaceKHR);
 #endif  /* PLATFORM_LINUX */
@@ -154,22 +159,60 @@ static int create_surface(struct render *r, struct window *w) {
   return RENDER_ERROR_NONE;
 }
 
-static int get_devices(struct render *r) {
+static int get_devices(
+  struct render *r,
+  VkPhysicalDevice **phys_devs,
+  VkPhysicalDeviceProperties **phys_dev_props
+) {
   uint32_t n_devices;
+  size_t i;
   VkResult result;
 
   result = vkEnumeratePhysicalDevices(r->instance, &n_devices, NULL);
   if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_PHYSICAL_DEVICE;
   if (n_devices == 0) return RENDER_ERROR_VULKAN_NO_DEVICES;
   r->n_devices = n_devices;
-  r->phys_devices = malloc(sizeof(VkPhysicalDevice) * n_devices);
-  if (!r->phys_devices) return RENDER_ERROR_MEMORY;
+  *phys_devs = malloc(sizeof(VkPhysicalDevice) * n_devices);
+  if (!*phys_devs) return RENDER_ERROR_MEMORY;
   result = vkEnumeratePhysicalDevices(
     r->instance,
     &n_devices,
-    r->phys_devices
+    *phys_devs
   );
-  if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_PHYSICAL_DEVICE;
+  if (result != VK_SUCCESS) {
+    free(*phys_devs);
+    return RENDER_ERROR_VULKAN_PHYSICAL_DEVICE;
+  }
+  *phys_dev_props = malloc(sizeof(VkPhysicalDeviceProperties) * r->n_devices);
+  if (!*phys_dev_props) {
+    free(*phys_devs);
+    return RENDER_ERROR_MEMORY;
+  }
+  for (i = 0; i < r->n_devices; ++i) {
+    VkPhysicalDeviceProperties *props;
+
+    props = *phys_dev_props;
+    vkGetPhysicalDeviceProperties(
+      (*phys_devs)[i],
+      props + i
+    );
+  }
+  return RENDER_ERROR_NONE;
+}
+
+static int get_device_properties(
+  struct render *r,
+  VkPhysicalDevice *phys_devs,
+  VkPhysicalDeviceProperties **phys_dev_props
+) {
+  size_t i;
+
+  phys_dev_props = malloc(sizeof(VkPhysicalDeviceProperties) * r->n_devices);
+  if (!phys_dev_props) return RENDER_ERROR_MEMORY;
+  return RENDER_ERROR_NONE;
+}
+
+static int create_devices(struct render *r) {
   return RENDER_ERROR_NONE;
 }
 
@@ -186,6 +229,8 @@ int render_init(struct render *r, struct window *w) {
   };
 
   size_t n_inst_exts;
+  VkPhysicalDevice *phys_devs;
+  VkPhysicalDeviceProperties *phys_dev_props;
 
   if (!r) return RENDER_ERROR_NULL;
   if (!w) return RENDER_ERROR_NULL;
@@ -197,7 +242,11 @@ int render_init(struct render *r, struct window *w) {
   chkerr(create_instance(r, n_inst_exts, inst_exts));
   chkerr(load_instance_functions(r));
   chkerr(create_surface(r, w));
-  chkerr(get_devices(r));
+  chkerr(get_devices(r, &phys_devs, &phys_dev_props));
+  /* chkerr(get_device_properties(r, phys_devs, &phys_dev_props)); */
+  /* chkerr(create_devices(r)); */
+  free(phys_devs);
+  free(phys_dev_props);
   return RENDER_ERROR_NONE;
 }
 

@@ -18,7 +18,6 @@ string(TOLOWER ${PLATFORM} PLATFORM)
 string(TOLOWER ${RENDER_BACKEND} RENDER_BACKEND)
 
 ## External libraries
-set(EXTLIBS)
 find_library(DL NAMES "dl")
 find_library(XAU NAMES "Xau" PATHS "./libs" NO_DEFAULT_PATH)
 find_library(XDMCP NAMES "Xdmcp" PATHS "./libs" NO_DEFAULT_PATH)

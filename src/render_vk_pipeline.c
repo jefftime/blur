@@ -20,63 +20,96 @@
 #include "error.h"
 #include <stdlib.h>
 
-static int get_queue_props(struct render_pipeline *rp) {
-  uint32_t n_props;
+/* static int get_queue_props(struct render_pipeline *rp) { */
+/*   uint32_t n_props; */
 
-  vkGetPhysicalDeviceQueueFamilyProperties(
-    rp->ctx->phys_devices[rp->device],
-    &n_props,
-    NULL
-  );
-  if (n_props == 0) return RENDER_ERROR_VULKAN_PHYSICAL_DEVICE;
-  rp->n_queue_props = n_props;
-  rp->queue_props = malloc(sizeof(VkQueueFamilyProperties) * n_props);
-  if (!rp->queue_props) return RENDER_ERROR_MEMORY;
-  vkGetPhysicalDeviceQueueFamilyProperties(
-    rp->ctx->phys_devices[rp->device],
-    &n_props,
-    rp->queue_props
-  );
-  return RENDER_ERROR_NONE;
-}
+/*   vkGetPhysicalDeviceQueueFamilyProperties( */
+/*     rp->ctx->phys_devices[rp->phys_device], */
+/*     &n_props, */
+/*     NULL */
+/*   ); */
+/*   if (n_props == 0) return RENDER_ERROR_VULKAN_PHYSICAL_DEVICE; */
+/*   rp->n_queue_props = n_props; */
+/*   rp->queue_props = malloc(sizeof(VkQueueFamilyProperties) * n_props); */
+/*   if (!rp->queue_props) return RENDER_ERROR_MEMORY; */
+/*   vkGetPhysicalDeviceQueueFamilyProperties( */
+/*     rp->ctx->phys_devices[rp->phys_device], */
+/*     &n_props, */
+/*     rp->queue_props */
+/*   ); */
+/*   return RENDER_ERROR_NONE; */
+/* } */
 
-static int get_queue_indices(struct render_pipeline *rp) {
-  int graphics_isset = 0;
-  int present_isset = 0;
-  uint32_t i;
-  VkResult result;
+/* static int get_queue_indices(struct render_pipeline *rp) { */
+/*   int graphics_isset = 0; */
+/*   int present_isset = 0; */
+/*   uint32_t i; */
+/*   VkResult result; */
 
-  for (i = 0; i < rp->n_queue_props; ++i) {
-    uint32_t present_support = 0;
+/*   for (i = 0; i < rp->n_queue_props; ++i) { */
+/*     uint32_t present_support = 0; */
 
-    /* Check graphics support */
-    if (
-      (rp->queue_props[i].queueCount > 0)
-      && (rp->queue_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
-    ) {
-      graphics_isset = 1;
-      rp->queue_index_graphics = i;
-    }
-    /* Check present support */
-    result = vkGetPhysicalDeviceSurfaceSupportKHR(
-      rp->ctx->phys_devices[rp->device],
-      (uint32_t) i,
-      rp->ctx->surface,
-      &present_support
-    );
-    if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_QUEUE_INDICES;
-    if ((rp->queue_props[i].queueCount > 0) && present_support) {
-      present_isset = 1;
-      rp->queue_index_present = i;
-    }
-  }
-  if (graphics_isset && present_isset) return RENDER_ERROR_NONE;
-  return RENDER_ERROR_VULKAN_QUEUE_INDICES;
-}
+/*     /\* Check graphics support *\/ */
+/*     if ( */
+/*       (rp->queue_props[i].queueCount > 0) */
+/*       && (rp->queue_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) */
+/*     ) { */
+/*       graphics_isset = 1; */
+/*       rp->queue_index_graphics = i; */
+/*     } */
+/*     /\* Check present support *\/ */
+/*     result = vkGetPhysicalDeviceSurfaceSupportKHR( */
+/*       rp->ctx->phys_devices[rp->phys_device], */
+/*       (uint32_t) i, */
+/*       rp->ctx->surface, */
+/*       &present_support */
+/*     ); */
+/*     if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_QUEUE_INDICES; */
+/*     if ((rp->queue_props[i].queueCount > 0) && present_support) { */
+/*       present_isset = 1; */
+/*       rp->queue_index_present = i; */
+/*     } */
+/*   } */
+/*   if (graphics_isset && present_isset) return RENDER_ERROR_NONE; */
+/*   return RENDER_ERROR_VULKAN_QUEUE_INDICES; */
+/* } */
 
-static int create_device(struct render_pipeline *rp) {
-  return RENDER_ERROR_NONE;
-}
+/* static int create_device(struct render_pipeline *rp) { */
+/*   char *extensions[] = { "VK_KHR_swapchain" }; */
+/*   float queue_priority = 1.0f; */
+/*   VkDeviceQueueCreateInfo queue_create_infos[] = { { 0 }, { 0 } }; */
+/*   VkDeviceCreateInfo create_info = { 0 }; */
+/*   VkResult result; */
+
+/*   /\* TODO: support separate graphics and present queues since */
+/*    * curretly this is out of spec *\/ */
+/*   if (rp->queue_index_present != rp->queue_index_graphics) { */
+/*     return RENDER_ERROR_VULKAN_QUEUE_INDEX_MISMATCH; */
+/*   } */
+/*   /\* Graphics queue *\/ */
+/*   queue_create_infos[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO; */
+/*   queue_create_infos[0].queueFamilyIndex = rp->queue_index_graphics; */
+/*   queue_create_infos[0].queueCount = 1; */
+/*   queue_create_infos[0].pQueuePriorities = &queue_priority; */
+/*   /\* Present queue *\/ */
+/*   queue_create_infos[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO; */
+/*   queue_create_infos[1].queueFamilyIndex = rp->queue_index_present; */
+/*   queue_create_infos[1].queueCount = 1; */
+/*   queue_create_infos[1].pQueuePriorities = &queue_priority; */
+/*   create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO; */
+/*   create_info.queueCreateInfoCount = 1; */
+/*   create_info.pQueueCreateInfos = queue_create_infos; */
+/*   create_info.enabledExtensionCount = 1; */
+/*   create_info.ppEnabledExtensionNames = (const char *const *) extensions; */
+/*   /\* result = vkCreateDevice( *\/ */
+/*   /\*   rp->ctx->phys_devices[rp->phys_device], *\/ */
+/*   /\*   &create_info, *\/ */
+/*   /\*   NULL, *\/ */
+/*   /\*   &rp->device *\/ */
+/*   /\* ); *\/ */
+/*   /\* if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_CREATE_DEVICE; *\/ */
+/*   return RENDER_ERROR_NONE; */
+/* } */
 
 /* **************************************** */
 /* Public */
@@ -100,10 +133,10 @@ int render_init_pipeline(
   if (!rp) return RENDER_ERROR_NULL;
   if (!r) return RENDER_ERROR_NULL;
   rp->ctx = r;
-  rp->device = device;
-  chkerrf(get_queue_props(rp), render_deinit_pipeline(rp));
-  chkerrf(get_queue_indices(rp), render_deinit_pipeline(rp));
-  chkerrf(create_device(rp), render_deinit_pipeline(rp));
+  rp->phys_device = device;
+  /* chkerrf(get_queue_props(rp), render_deinit_pipeline(rp)); */
+  /* chkerrf(get_queue_indices(rp), render_deinit_pipeline(rp)); */
+  /* chkerrf(create_device(rp), render_deinit_pipeline(rp)); */
   /* chkerrf(load_device_functions(rp), render_deinit_pipeline(rp)); */
   /* chkerrf(get_surface_format(r), render_deinit_pipeline(rp)); */
   /* chkerrf(create_swapchain(r), render_deinit_pipeline(rp)); */
