@@ -134,6 +134,7 @@ static int load_instance_functions(struct render *r) {
   load(vkDestroySurfaceKHR);
   load(vkCreateDevice);
   load(vkGetDeviceQueue);
+  load(vkDestroyDevice);
 #if PLATFORM_LINUX
   load(vkCreateXcbSurfaceKHR);
 #endif  /* PLATFORM_LINUX */
@@ -183,7 +184,9 @@ static int get_devices(
     free(*phys_devs);
     return RENDER_ERROR_VULKAN_PHYSICAL_DEVICE;
   }
-  *phys_dev_props = malloc(sizeof(VkPhysicalDeviceProperties) * r->n_devices);
+  *phys_dev_props = malloc(
+    sizeof(VkPhysicalDeviceProperties) * r->n_devices
+  );
   if (!*phys_dev_props) {
     free(*phys_devs);
     return RENDER_ERROR_MEMORY;
@@ -200,19 +203,117 @@ static int get_devices(
   return RENDER_ERROR_NONE;
 }
 
-static int get_device_properties(
+static int get_queue_indices(
   struct render *r,
-  VkPhysicalDevice *phys_devs,
-  VkPhysicalDeviceProperties **phys_dev_props
+  VkPhysicalDevice device,
+  uint32_t *out_graphics,
+  uint32_t *out_present
 ) {
-  size_t i;
+  int graphics_isset = 0, present_isset = 0;
+  uint32_t i, n_props;
+  VkQueueFamilyProperties *props;
+  VkResult result;
 
-  phys_dev_props = malloc(sizeof(VkPhysicalDeviceProperties) * r->n_devices);
-  if (!phys_dev_props) return RENDER_ERROR_MEMORY;
+  vkGetPhysicalDeviceQueueFamilyProperties(device, &n_props, NULL);
+  if (n_props == 0) return RENDER_ERROR_VULKAN_QUEUE_INDICES;
+  props = malloc(sizeof(VkPhysicalDeviceProperties) * n_props);
+  if (!props) return RENDER_ERROR_MEMORY;
+  vkGetPhysicalDeviceQueueFamilyProperties(device, &n_props, props);
+  for (i = 0; i < n_props; ++i) {
+    uint32_t present_support = 0;
+
+    if (
+      props[i].queueCount > 0
+      && props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT
+    ) {
+      graphics_isset = 0;
+      *out_graphics = i;
+    }
+    result = vkGetPhysicalDeviceSurfaceSupportKHR(
+      device,
+      i,
+      r->surface,
+      &present_support
+    );
+    if (result != VK_SUCCESS) {
+      free(props);
+      return RENDER_ERROR_VULKAN_QUEUE_INDICES;
+    }
+    if (props[i].queueCount > 0 && present_support) {
+      present_isset = 1;
+      *out_present = i;
+    }
+  }
+  free(props);
+  if (graphics_isset && present_isset) return RENDER_ERROR_NONE;
   return RENDER_ERROR_NONE;
 }
 
-static int create_devices(struct render *r) {
+static int get_queue_information(
+  struct render *r,
+  VkPhysicalDevice *devices
+) {
+  size_t i;
+
+  r->graphics_indices = malloc(sizeof(uint32_t) * r->n_devices);
+  if (!r->graphics_indices) return RENDER_ERROR_MEMORY;
+  r->present_indices = malloc(sizeof(uint32_t) * r->n_devices);
+  if (!r->present_indices) {
+    free(r->graphics_indices);
+    return RENDER_ERROR_MEMORY;
+  }
+
+  for (i = 0; i < r->n_devices; ++i) {
+    chkerr(get_queue_indices(
+             r,
+             devices[i],
+             r->graphics_indices + i,
+             r->present_indices + i
+           ));
+  }
+  return RENDER_ERROR_NONE;
+}
+
+static int create_logical_devices(
+  struct render *r,
+  VkPhysicalDevice *phys_devices
+) {
+  char *extensions[] = { "VK_KHR_swapchain" };
+  size_t i;
+
+  r->devices = malloc(sizeof(VkDevice) * r->n_devices);
+  for (i = 0; i < r->n_devices; ++i) {
+    float queue_priority = 1.0f;
+    VkDeviceQueueCreateInfo queue_create_infos[] = { { 0 }, { 0 } };
+    VkDeviceCreateInfo create_info = { 0 };
+    VkResult result;
+
+    /* TODO: support separate graphics and present queues since
+     * currently this is out of spec */
+    queue_create_infos[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queue_create_infos[0].queueFamilyIndex = r->graphics_indices[i];
+    queue_create_infos[0].queueCount = 1;
+    queue_create_infos[0].pQueuePriorities = &queue_priority;
+    queue_create_infos[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queue_create_infos[1].queueFamilyIndex = r->present_indices[i];
+    queue_create_infos[1].queueCount = 1;
+    queue_create_infos[1].pQueuePriorities = &queue_priority;
+    create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    create_info.pQueueCreateInfos = queue_create_infos;
+    create_info.enabledExtensionCount = 1;
+    create_info.ppEnabledExtensionNames = (const char *const *) extensions;
+    result = vkCreateDevice(
+      phys_devices[i],
+      &create_info,
+      NULL,
+      r->devices + i
+    );
+    if (result != VK_SUCCESS) {
+      while (i--) vkDestroyDevice(r->devices[i], NULL);
+      free(r->devices);
+      return RENDER_ERROR_VULKAN_CREATE_DEVICE;
+    }
+  }
   return RENDER_ERROR_NONE;
 }
 
@@ -243,15 +344,21 @@ int render_init(struct render *r, struct window *w) {
   chkerr(load_instance_functions(r));
   chkerr(create_surface(r, w));
   chkerr(get_devices(r, &phys_devs, &phys_dev_props));
-  /* chkerr(get_device_properties(r, phys_devs, &phys_dev_props)); */
-  /* chkerr(create_devices(r)); */
+  chkerr(get_queue_information(r, phys_devs));
+  chkerr(create_logical_devices(r, phys_devs));
   free(phys_devs);
   free(phys_dev_props);
   return RENDER_ERROR_NONE;
 }
 
 void render_deinit(struct render *r) {
+  size_t i;
+
   if (!r) return;
+  for (i = 0; i < r->n_devices; ++i) vkDestroyDevice(r->devices[i], NULL);
+  free(r->devices);
+  free(r->graphics_indices);
+  free(r->present_indices);
   vkDestroySurfaceKHR(r->instance, r->surface, NULL);
   vkDestroyInstance(r->instance, NULL);
   dlclose(r->vklib);

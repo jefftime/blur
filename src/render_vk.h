@@ -22,6 +22,7 @@ vk_instance_func(vkGetPhysicalDeviceQueueFamilyProperties);
 vk_instance_func(vkGetPhysicalDeviceSurfaceSupportKHR);
 vk_instance_func(vkCreateDevice);
 vk_instance_func(vkGetDeviceQueue);
+vk_instance_func(vkDestroyDevice);
 
 #if PLATFORM_LINUX
 vk_instance_func(vkCreateXcbSurfaceKHR);
@@ -32,10 +33,13 @@ vk_instance_func(vkCreateXcbSurfaceKHR);
 struct render {
   void *vklib;
   VkInstance instance;
-  uint32_t n_devices;
-  VkDevice *devices;
   VkSurfaceKHR surface;
-  size_t n_phys_devices;
+
+  /* Device information */
+  size_t n_devices;
+  uint32_t *graphics_indices;
+  uint32_t *present_indices;
+  VkDevice *devices;
 };
 
 #define vkfunc(F) PFN_vk##F F
