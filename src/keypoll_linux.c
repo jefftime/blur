@@ -193,8 +193,11 @@ static int supported_device(char *name) {
     device = supported_devices[i];
     device_len = strlen(device);
     if (len > device_len) {
+      /* The incoming device might include a path in its name, so we'll
+       * remove that here */
       match = !strcmp(name + (len - device_len), device);
     } else {
+      /* Otherwise, just compare normally */
       match = !strcmp(name, device);
     }
     if (match) return 1;
@@ -202,7 +205,11 @@ static int supported_device(char *name) {
   return 0;
 }
 
-static int process_devices(struct kp_ctx *kp, size_t n_devices, char **devices) {
+static int process_devices(
+  struct kp_ctx *kp,
+  size_t n_devices,
+  char **devices
+) {
   enum {
     filepath_end = 19
   };
