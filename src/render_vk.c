@@ -21,8 +21,8 @@
 #include "window.h"
 #include <stdlib.h>
 #include <string.h>
-#include <vulkan/vk_platform.h>
 #include <vulkan/vulkan_core.h>
+#include <vulkan/vk_platform.h>
 
 #if PLATFORM_LINUX
 #include <vulkan/vulkan_xcb.h>
@@ -317,6 +317,25 @@ static int create_logical_devices(
   return RENDER_ERROR_NONE;
 }
 
+static int load_device_functions(struct render *r) {
+#define load(loc, device, F) \
+  if (!((loc).F = (PFN_##F) vkGetDeviceProcAddr(device, #F)))  \
+    return RENDER_ERROR_VULKAN_DEVICE_FUNC_LOAD
+
+  size_t i;
+
+  r->func = malloc(sizeof(struct device_functions) * r->n_devices);
+  if (!r->func) return RENDER_ERROR_MEMORY;
+  for (i = 0; i < r->n_devices; ++i) {
+#define load_(F) load(r->func[i], r->devices[i], F)
+    load_(vkCreateSwapchainKHR);
+#undef load_
+  }
+  return RENDER_ERROR_NONE;
+
+#undef load
+}
+
 /* **************************************** */
 /* Public */
 /* **************************************** */
@@ -346,6 +365,7 @@ int render_init(struct render *r, struct window *w) {
   chkerr(get_devices(r, &phys_devs, &phys_dev_props));
   chkerr(get_queue_information(r, phys_devs));
   chkerr(create_logical_devices(r, phys_devs));
+  chkerr(load_device_functions(r));
   free(phys_devs);
   free(phys_dev_props);
   return RENDER_ERROR_NONE;
@@ -355,6 +375,7 @@ void render_deinit(struct render *r) {
   size_t i;
 
   if (!r) return;
+  free(r->func);
   for (i = 0; i < r->n_devices; ++i) vkDestroyDevice(r->devices[i], NULL);
   free(r->devices);
   free(r->graphics_indices);

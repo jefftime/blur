@@ -3,32 +3,35 @@
 
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan_core.h>
+#include <vulkan/vk_platform.h>
 
 #if PLATFORM_LINUX
 #include <vulkan/vulkan_xcb.h>
 #endif
 
-#define vk_instance_func(f) PFN_##f f
+#define vkfunc(F) PFN_##F F
 
-vk_instance_func(vkGetInstanceProcAddr);
-vk_instance_func(vkCreateInstance);
-vk_instance_func(vkDestroyInstance);
-vk_instance_func(vkEnumerateInstanceExtensionProperties);
-vk_instance_func(vkGetPhysicalDeviceProperties);
-vk_instance_func(vkGetDeviceProcAddr);
-vk_instance_func(vkEnumeratePhysicalDevices);
-vk_instance_func(vkDestroySurfaceKHR);
-vk_instance_func(vkGetPhysicalDeviceQueueFamilyProperties);
-vk_instance_func(vkGetPhysicalDeviceSurfaceSupportKHR);
-vk_instance_func(vkCreateDevice);
-vk_instance_func(vkGetDeviceQueue);
-vk_instance_func(vkDestroyDevice);
+vkfunc(vkGetInstanceProcAddr);
+vkfunc(vkCreateInstance);
+vkfunc(vkDestroyInstance);
+vkfunc(vkEnumerateInstanceExtensionProperties);
+vkfunc(vkGetPhysicalDeviceProperties);
+vkfunc(vkGetDeviceProcAddr);
+vkfunc(vkEnumeratePhysicalDevices);
+vkfunc(vkDestroySurfaceKHR);
+vkfunc(vkGetPhysicalDeviceQueueFamilyProperties);
+vkfunc(vkGetPhysicalDeviceSurfaceSupportKHR);
+vkfunc(vkCreateDevice);
+vkfunc(vkGetDeviceQueue);
+vkfunc(vkDestroyDevice);
 
 #if PLATFORM_LINUX
-vk_instance_func(vkCreateXcbSurfaceKHR);
+vkfunc(vkCreateXcbSurfaceKHR);
 #endif
 
-#undef vk_instance_func
+struct device_functions {
+  vkfunc(vkCreateSwapchainKHR);
+};
 
 struct render {
   void *vklib;
@@ -40,17 +43,12 @@ struct render {
   uint32_t *graphics_indices;
   uint32_t *present_indices;
   VkDevice *devices;
+  struct device_functions *func;
 };
-
-#define vkfunc(F) PFN_vk##F F
-struct vk_device_functions {
-  int dummy;
-};
-#undef vkfunc
 
 struct render_pipeline {
   struct render *ctx;
-  struct vk_device_functions vk;
+  struct device_functions func;
   size_t phys_device;
   uint32_t n_queue_props;
   VkQueueFamilyProperties *queue_props;
@@ -60,6 +58,8 @@ struct render_pipeline {
   VkQueue graphics_queue;
   VkQueue present_queue;
 };
+
+#undef vkfunc
 
 #endif
 
