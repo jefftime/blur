@@ -2,3 +2,4 @@ bin/
 libs/*
 TAGS
 .projectile
+bin-asan/
