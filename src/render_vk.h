@@ -15,15 +15,23 @@ vkfunc(vkGetInstanceProcAddr);
 vkfunc(vkCreateInstance);
 vkfunc(vkDestroyInstance);
 vkfunc(vkEnumerateInstanceExtensionProperties);
+/* Physical device */
 vkfunc(vkGetPhysicalDeviceProperties);
 vkfunc(vkGetDeviceProcAddr);
 vkfunc(vkEnumeratePhysicalDevices);
 vkfunc(vkDestroySurfaceKHR);
 vkfunc(vkGetPhysicalDeviceQueueFamilyProperties);
 vkfunc(vkGetPhysicalDeviceSurfaceSupportKHR);
+/* Logical device */
 vkfunc(vkCreateDevice);
 vkfunc(vkGetDeviceQueue);
 vkfunc(vkDestroyDevice);
+/* Swapchain */
+vkfunc(vkGetPhysicalDeviceSurfaceFormatsKHR);
+vkfunc(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
+vkfunc(vkCreateSwapchainKHR);
+vkfunc(vkDestroySwapchainKHR);
+vkfunc(vkGetSwapchainImagesKHR);
 
 #if PLATFORM_LINUX
 vkfunc(vkCreateXcbSurfaceKHR);
@@ -42,8 +50,19 @@ struct render {
   size_t n_devices;
   uint32_t *graphics_indices;
   uint32_t *present_indices;
+  VkPhysicalDevice *pdevices;
   VkDevice *devices;
+  VkSurfaceFormatKHR *formats;
   struct device_functions *func;
+
+  /* Active device */
+  size_t active_device_index;
+  VkPhysicalDevice *active_pdevice;
+  VkDevice *active_device;
+  VkSwapchainKHR swapchain;
+  size_t n_swapchain_images;
+  VkImage *swapchain_images;
+  VkExtent2D swap_extent;
 };
 
 struct render_pipeline {

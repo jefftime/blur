@@ -135,6 +135,11 @@ static int load_instance_functions(struct render *r) {
   load(vkCreateDevice);
   load(vkGetDeviceQueue);
   load(vkDestroyDevice);
+  load(vkGetPhysicalDeviceSurfaceFormatsKHR);
+  load(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
+  load(vkCreateSwapchainKHR);
+  load(vkDestroySwapchainKHR);
+  load(vkGetSwapchainImagesKHR);
 #if PLATFORM_LINUX
   load(vkCreateXcbSurfaceKHR);
 #endif  /* PLATFORM_LINUX */
@@ -226,7 +231,7 @@ static int get_queue_indices(
       props[i].queueCount > 0
       && props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT
     ) {
-      graphics_isset = 0;
+      graphics_isset = 1;
       *out_graphics = i;
     }
     result = vkGetPhysicalDeviceSurfaceSupportKHR(
@@ -246,7 +251,7 @@ static int get_queue_indices(
   }
   free(props);
   if (graphics_isset && present_isset) return RENDER_ERROR_NONE;
-  return RENDER_ERROR_NONE;
+  return RENDER_ERROR_VULKAN_QUEUE_INDICES;
 }
 
 static int get_queue_information(
@@ -328,12 +333,130 @@ static int load_device_functions(struct render *r) {
   if (!r->func) return RENDER_ERROR_MEMORY;
   for (i = 0; i < r->n_devices; ++i) {
 #define load_(F) load(r->func[i], r->devices[i], F)
-    load_(vkCreateSwapchainKHR);
+    /* load_(vkCreateSwapchainKHR); */
 #undef load_
   }
   return RENDER_ERROR_NONE;
 
 #undef load
+}
+
+static int get_surface_format(
+  struct render *r,
+  VkPhysicalDevice *phys_devices
+) {
+  uint32_t n_formats;
+  size_t i;
+
+  r->formats = malloc(sizeof(VkSurfaceFormatKHR) * r->n_devices);
+  if (!r->formats) return RENDER_ERROR_MEMORY;
+  for (i = 0; i < r->n_devices; ++i) {
+    VkSurfaceFormatKHR *formats;
+    VkResult result;
+
+    result = vkGetPhysicalDeviceSurfaceFormatsKHR(
+      phys_devices[i],
+      r->surface,
+      &n_formats,
+      NULL
+    );
+    if (result != VK_SUCCESS) {
+      free(r->formats);
+      return RENDER_ERROR_VULKAN_SURFACE_FORMAT;
+    }
+    formats = malloc(sizeof(VkSurfaceFormatKHR) * n_formats);
+    if (!formats) {
+      free(r->formats);
+      return RENDER_ERROR_MEMORY;
+    }
+    result = vkGetPhysicalDeviceSurfaceFormatsKHR(
+      phys_devices[i],
+      r->surface,
+      &n_formats,
+      formats
+    );
+    if (result != VK_SUCCESS) {
+      free(r->formats);
+      free(formats);
+      return RENDER_ERROR_VULKAN_SURFACE_FORMAT;
+    }
+    r->formats[i] = formats[0];
+    free(formats);
+  }
+  return RENDER_ERROR_NONE;
+}
+
+static int get_swapchain_images(struct render *r) {
+  uint32_t n_images;
+  VkResult result;
+
+  result = vkGetSwapchainImagesKHR(
+    *r->active_device,
+    r->swapchain,
+    &n_images,
+    NULL
+  );
+  if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_SWAPCHAIN_IMAGES;
+  if (n_images == 0) return RENDER_ERROR_VULKAN_SWAPCHAIN_IMAGES;
+  r->swapchain_images = malloc(sizeof(VkImage) * n_images);
+  if (!r->swapchain_images) return RENDER_ERROR_MEMORY;
+  result = vkGetSwapchainImagesKHR(
+    *r->active_device,
+    r->swapchain,
+    &n_images,
+    r->swapchain_images
+  );
+  if (result != VK_SUCCESS) {
+    free(r->swapchain_images);
+    return RENDER_ERROR_VULKAN_SWAPCHAIN_IMAGES;
+  }
+  return RENDER_ERROR_NONE;
+}
+
+static int setup_swapchain(struct render *r) {
+  int rc;
+  uint32_t n_images;
+  VkSurfaceCapabilitiesKHR capabilities;
+  VkSwapchainCreateInfoKHR create_info = { 0 };
+  VkResult result;
+
+  result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+    *r->active_pdevice,
+    r->surface,
+    &capabilities
+  );
+  if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_SURFACE_CAPABILITIES;
+  create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+  create_info.surface = r->surface;
+  create_info.minImageCount = 2;
+  create_info.imageFormat = r->formats[r->active_device_index].format;
+  create_info.imageColorSpace = r->formats[r->active_device_index].colorSpace;
+  create_info.imageExtent = capabilities.currentExtent;
+  create_info.imageArrayLayers = 1;
+  create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  create_info.preTransform = capabilities.currentTransform;
+  create_info.compositeAlpha = capabilities.supportedCompositeAlpha;
+  create_info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+  create_info.clipped = VK_TRUE;
+  result = vkCreateSwapchainKHR(
+    *r->active_device,
+    &create_info,
+    NULL,
+    &r->swapchain
+  );
+  if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_SWAPCHAIN;
+  r->swap_extent = capabilities.currentExtent;
+  if ((rc = get_swapchain_images(r))) {
+    vkDestroySwapchainKHR(*r->active_device, r->swapchain, NULL);
+    return rc;
+  }
+  return RENDER_ERROR_NONE;
+}
+
+static void teardown_active_device(struct render *r) {
+  vkDestroySwapchainKHR(*r->active_device, r->swapchain, NULL);
+  free(r->swapchain_images);
 }
 
 /* **************************************** */
@@ -349,8 +472,8 @@ int render_init(struct render *r, struct window *w) {
   };
 
   size_t n_inst_exts;
-  VkPhysicalDevice *phys_devs;
-  VkPhysicalDeviceProperties *phys_dev_props;
+  VkPhysicalDevice *pdevices = NULL;
+  VkPhysicalDeviceProperties *pdevice_props = NULL;
 
   if (!r) return RENDER_ERROR_NULL;
   if (!w) return RENDER_ERROR_NULL;
@@ -362,12 +485,13 @@ int render_init(struct render *r, struct window *w) {
   chkerr(create_instance(r, n_inst_exts, inst_exts));
   chkerr(load_instance_functions(r));
   chkerr(create_surface(r, w));
-  chkerr(get_devices(r, &phys_devs, &phys_dev_props));
-  chkerr(get_queue_information(r, phys_devs));
-  chkerr(create_logical_devices(r, phys_devs));
+  chkerr(get_devices(r, &pdevices, &pdevice_props));
+  chkerr(get_queue_information(r, pdevices));
+  chkerr(create_logical_devices(r, pdevices));
   chkerr(load_device_functions(r));
-  free(phys_devs);
-  free(phys_dev_props);
+  chkerr(get_surface_format(r, pdevices));
+  r->pdevices = pdevices;
+  free(pdevice_props);
   return RENDER_ERROR_NONE;
 }
 
@@ -375,6 +499,8 @@ void render_deinit(struct render *r) {
   size_t i;
 
   if (!r) return;
+  if (r->active_device) teardown_active_device(r);
+  free(r->formats);
   free(r->func);
   for (i = 0; i < r->n_devices; ++i) vkDestroyDevice(r->devices[i], NULL);
   free(r->devices);
@@ -385,8 +511,14 @@ void render_deinit(struct render *r) {
   dlclose(r->vklib);
 }
 
-struct render_pipeline *render_create_pipeline(struct render *r) {
-  return NULL;
+int render_set_active_device(struct render *r, size_t device_id) {
+  if (!r) return RENDER_ERROR_NULL;
+  if (r->active_device) teardown_active_device(r);
+  r->active_device_index = device_id;
+  r->active_pdevice = &r->pdevices[device_id];
+  r->active_device = &r->devices[device_id];
+  chkerr(setup_swapchain(r));
+  return RENDER_ERROR_NONE;
 }
 
 void render_update(struct render *r) {

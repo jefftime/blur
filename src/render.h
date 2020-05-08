@@ -77,6 +77,7 @@
 /* render_<backend>.c */
 int render_init(struct render *r, struct window *w);
 void render_deinit(struct render *r);
+int render_set_active_device(struct render *r, size_t device_id);
 void render_update(struct render *r);
 /* **************************************** */
 
