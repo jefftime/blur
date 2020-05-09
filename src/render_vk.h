@@ -37,9 +37,15 @@ vkfunc(vkGetSwapchainImagesKHR);
 vkfunc(vkCreateXcbSurfaceKHR);
 #endif
 
-struct device_functions {
-  vkfunc(vkCreateSwapchainKHR);
-};
+/* Device functions */
+vkfunc(vkCreateShaderModule);
+vkfunc(vkDestroyShaderModule);
+vkfunc(vkCreatePipelineLayout);
+vkfunc(vkDestroyPipelineLayout);
+vkfunc(vkCreateRenderPass);
+vkfunc(vkDestroyRenderPass);
+vkfunc(vkCreateGraphicsPipelines);
+vkfunc(vkDestroyPipeline);
 
 struct render {
   void *vklib;
@@ -53,7 +59,6 @@ struct render {
   VkPhysicalDevice *pdevices;
   VkDevice *devices;
   VkSurfaceFormatKHR *formats;
-  struct device_functions *func;
 
   /* Active device */
   size_t active_device_index;
@@ -66,16 +71,11 @@ struct render {
 };
 
 struct render_pipeline {
-  struct render *ctx;
-  struct device_functions func;
-  size_t phys_device;
-  uint32_t n_queue_props;
-  VkQueueFamilyProperties *queue_props;
-  uint32_t queue_index_graphics;
-  uint32_t queue_index_present;
   VkDevice device;
-  VkQueue graphics_queue;
-  VkQueue present_queue;
+  VkSurfaceFormatKHR format;
+  VkExtent2D swap_extent;
+  VkRenderPass render_pass;
+  VkPipeline pipeline;
 };
 
 #undef vkfunc

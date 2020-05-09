@@ -322,20 +322,19 @@ static int create_logical_devices(
   return RENDER_ERROR_NONE;
 }
 
-static int load_device_functions(struct render *r) {
-#define load(loc, device, F) \
-  if (!((loc).F = (PFN_##F) vkGetDeviceProcAddr(device, #F)))  \
+static int load_device_functions(struct render *r, size_t device_id) {
+#define load(F) \
+  if (!(F = (PFN_##F) vkGetDeviceProcAddr(r->devices[device_id], #F))) \
     return RENDER_ERROR_VULKAN_DEVICE_FUNC_LOAD
 
-  size_t i;
-
-  r->func = malloc(sizeof(struct device_functions) * r->n_devices);
-  if (!r->func) return RENDER_ERROR_MEMORY;
-  for (i = 0; i < r->n_devices; ++i) {
-#define load_(F) load(r->func[i], r->devices[i], F)
-    /* load_(vkCreateSwapchainKHR); */
-#undef load_
-  }
+  load(vkCreateShaderModule);
+  load(vkDestroyShaderModule);
+  load(vkCreatePipelineLayout);
+  load(vkDestroyPipelineLayout);
+  load(vkCreateRenderPass);
+  load(vkDestroyRenderPass);
+  load(vkCreateGraphicsPipelines);
+  load(vkDestroyPipeline);
   return RENDER_ERROR_NONE;
 
 #undef load
@@ -488,7 +487,6 @@ int render_init(struct render *r, struct window *w) {
   chkerr(get_devices(r, &pdevices, &pdevice_props));
   chkerr(get_queue_information(r, pdevices));
   chkerr(create_logical_devices(r, pdevices));
-  chkerr(load_device_functions(r));
   chkerr(get_surface_format(r, pdevices));
   r->pdevices = pdevices;
   free(pdevice_props);
@@ -501,7 +499,6 @@ void render_deinit(struct render *r) {
   if (!r) return;
   if (r->active_device) teardown_active_device(r);
   free(r->formats);
-  free(r->func);
   for (i = 0; i < r->n_devices; ++i) vkDestroyDevice(r->devices[i], NULL);
   free(r->devices);
   free(r->graphics_indices);
@@ -517,6 +514,7 @@ int render_set_active_device(struct render *r, size_t device_id) {
   r->active_device_index = device_id;
   r->active_pdevice = &r->pdevices[device_id];
   r->active_device = &r->devices[device_id];
+  chkerr(load_device_functions(r, device_id));
   chkerr(setup_swapchain(r));
   return RENDER_ERROR_NONE;
 }
