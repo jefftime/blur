@@ -46,6 +46,10 @@ vkfunc(vkCreateRenderPass);
 vkfunc(vkDestroyRenderPass);
 vkfunc(vkCreateGraphicsPipelines);
 vkfunc(vkDestroyPipeline);
+vkfunc(vkCreateImageView);
+vkfunc(vkDestroyImageView);
+vkfunc(vkCreateFramebuffer);
+vkfunc(vkDestroyFramebuffer);
 
 struct render {
   void *vklib;
@@ -76,6 +80,10 @@ struct render_pipeline {
   VkExtent2D swap_extent;
   VkRenderPass render_pass;
   VkPipeline pipeline;
+  size_t n_swapchain_images;
+  VkImage *swapchain_images;
+  VkImageView *image_views;
+  VkFramebuffer *framebuffers;
 };
 
 #undef vkfunc

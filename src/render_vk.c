@@ -167,7 +167,7 @@ static int create_surface(struct render *r, struct window *w) {
 
 static int get_devices(
   struct render *r,
-  VkPhysicalDevice **phys_devs,
+  VkPhysicalDevice **pdevices,
   VkPhysicalDeviceProperties **phys_dev_props
 ) {
   uint32_t n_devices;
@@ -178,22 +178,22 @@ static int get_devices(
   if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_PHYSICAL_DEVICE;
   if (n_devices == 0) return RENDER_ERROR_VULKAN_NO_DEVICES;
   r->n_devices = n_devices;
-  *phys_devs = malloc(sizeof(VkPhysicalDevice) * n_devices);
-  if (!*phys_devs) return RENDER_ERROR_MEMORY;
+  *pdevices = malloc(sizeof(VkPhysicalDevice) * n_devices);
+  if (!*pdevices) return RENDER_ERROR_MEMORY;
   result = vkEnumeratePhysicalDevices(
     r->instance,
     &n_devices,
-    *phys_devs
+    *pdevices
   );
   if (result != VK_SUCCESS) {
-    free(*phys_devs);
+    free(*pdevices);
     return RENDER_ERROR_VULKAN_PHYSICAL_DEVICE;
   }
   *phys_dev_props = malloc(
     sizeof(VkPhysicalDeviceProperties) * r->n_devices
   );
   if (!*phys_dev_props) {
-    free(*phys_devs);
+    free(*pdevices);
     return RENDER_ERROR_MEMORY;
   }
   for (i = 0; i < r->n_devices; ++i) {
@@ -201,7 +201,7 @@ static int get_devices(
 
     props = *phys_dev_props;
     vkGetPhysicalDeviceProperties(
-      (*phys_devs)[i],
+      (*pdevices)[i],
       props + i
     );
   }
@@ -335,6 +335,10 @@ static int load_device_functions(struct render *r, size_t device_id) {
   load(vkDestroyRenderPass);
   load(vkCreateGraphicsPipelines);
   load(vkDestroyPipeline);
+  load(vkCreateImageView);
+  load(vkDestroyImageView);
+  load(vkCreateFramebuffer);
+  load(vkDestroyFramebuffer);
   return RENDER_ERROR_NONE;
 
 #undef load
@@ -409,12 +413,12 @@ static int get_swapchain_images(struct render *r) {
     free(r->swapchain_images);
     return RENDER_ERROR_VULKAN_SWAPCHAIN_IMAGES;
   }
+  r->n_swapchain_images = n_images;
   return RENDER_ERROR_NONE;
 }
 
 static int setup_swapchain(struct render *r) {
   int rc;
-  uint32_t n_images;
   VkSurfaceCapabilitiesKHR capabilities;
   VkSwapchainCreateInfoKHR create_info = { 0 };
   VkResult result;
@@ -501,6 +505,7 @@ void render_deinit(struct render *r) {
   free(r->formats);
   for (i = 0; i < r->n_devices; ++i) vkDestroyDevice(r->devices[i], NULL);
   free(r->devices);
+  free(r->pdevices);
   free(r->graphics_indices);
   free(r->present_indices);
   vkDestroySurfaceKHR(r->instance, r->surface, NULL);

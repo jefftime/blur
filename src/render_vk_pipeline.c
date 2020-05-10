@@ -271,6 +271,77 @@ static int create_pipeline(
   return RENDER_ERROR_NONE;
 }
 
+static int create_framebuffers(struct render_pipeline *rp) {
+  size_t i;
+
+  rp->image_views = malloc(sizeof(VkImageView) * rp->n_swapchain_images);
+  if (!rp->image_views) return RENDER_ERROR_MEMORY;
+  rp->framebuffers = malloc(sizeof(VkFramebuffer) * rp->n_swapchain_images);
+  if (!rp->framebuffers) {
+    free(rp->image_views);
+    return RENDER_ERROR_MEMORY;
+  }
+  for (i = 0; i < rp->n_swapchain_images; ++i) {
+    VkImageViewCreateInfo image_view_info = { 0 };
+    VkFramebufferCreateInfo framebuffer_info = { 0 };
+    VkResult result;
+
+    image_view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    image_view_info.image = rp->swapchain_images[i];
+    image_view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    image_view_info.format = rp->format.format;
+    image_view_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    image_view_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    image_view_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    image_view_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    image_view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    image_view_info.subresourceRange.baseMipLevel = 0;
+    image_view_info.subresourceRange.levelCount = 1;
+    image_view_info.subresourceRange.baseArrayLayer = 0;
+    image_view_info.subresourceRange.layerCount = 1;
+    result = vkCreateImageView(
+      rp->device,
+      &image_view_info,
+      NULL,
+      rp->image_views + i
+    );
+    if (result != VK_SUCCESS) {
+      while (i--) {
+        vkDestroyImageView(rp->device, rp->image_views[i], NULL);
+        vkDestroyFramebuffer(rp->device, rp->framebuffers[i], NULL);
+      }
+      free(rp->image_views);
+      free(rp->framebuffers);
+      return RENDER_ERROR_VULKAN_IMAGE_VIEW;
+    }
+    framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebuffer_info.renderPass = rp->render_pass;
+    framebuffer_info.attachmentCount = 1;
+    framebuffer_info.pAttachments = rp->image_views + i;
+    framebuffer_info.width = rp->swap_extent.width;
+    framebuffer_info.height = rp->swap_extent.height;
+    framebuffer_info.layers = 1;
+    result = vkCreateFramebuffer(
+      rp->device,
+      &framebuffer_info,
+      NULL,
+      rp->framebuffers + i
+    );
+    if (result != VK_SUCCESS) {
+      /* Don't forget to destroy the image view we created this iteration */
+      vkDestroyImageView(rp->device, rp->image_views[i], NULL);
+      while (i--) {
+        vkDestroyImageView(rp->device, rp->image_views[i], NULL);
+        vkDestroyFramebuffer(rp->device, rp->framebuffers[i], NULL);
+      }
+      free(rp->image_views);
+      free(rp->framebuffers);
+      return RENDER_ERROR_VULKAN_FRAMEBUFFER;
+    }
+  }
+  return RENDER_ERROR_NONE;
+}
+
 /* **************************************** */
 /* Public */
 /* **************************************** */
@@ -278,7 +349,6 @@ static int create_pipeline(
 int render_init_pipeline(
   struct render_pipeline *rp,
   struct render *r,
-  size_t device,
   uint16_t width,
   uint16_t height
 ) {
@@ -296,6 +366,8 @@ int render_init_pipeline(
   rp->device = *r->active_device;
   rp->format = r->formats[r->active_device_index];
   rp->swap_extent = r->swap_extent;
+  rp->n_swapchain_images = r->n_swapchain_images;
+  rp->swapchain_images = r->swapchain_images;
   chkerr(
     create_pipeline(
       rp,
@@ -305,29 +377,21 @@ int render_init_pipeline(
       attrs
     )
   );
-  /* chkerrf(load_device_functions(rp), render_deinit_pipeline(rp)); */
-  /* chkerrf(get_surface_format(r), render_deinit_pipeline(rp)); */
-  /* chkerrf(create_swapchain(r), render_deinit_pipeline(rp)); */
-  /* chkerrf( */
-  /*   create_pipeline( */
-  /*     r, */
-  /*     sizeof(bindings) / sizeof(bindings[0]), */
-  /*     bindings, */
-  /*     sizeof(attrs) / sizeof(attrs[0]), */
-  /*     attrs, */
-  /*     vshader, */
-  /*     fshader */
-  /*   ), { */
-  /*     render_deinit_pipeline(rp); */
-  /*   } */
-  /* ); */
-  /* chkerrf(create_framebuffers(r), render_deinit_pipeline(rp)); */
+  chkerrf(create_framebuffers(rp), render_deinit_pipeline(rp));
   /* chkerrf(create_command_pool(r), render_deinit_pipeline(rp)); */
   /* chkerrf(create_command_buffers(r), render_deinit_pipeline(rp)); */
   return RENDER_ERROR_NONE;
 }
 
 void render_deinit_pipeline(struct render_pipeline *rp) {
+  size_t i;
+
+  for (i = 0; i < rp->n_swapchain_images; ++i) {
+    vkDestroyImageView(rp->device, rp->image_views[i], NULL);
+    vkDestroyFramebuffer(rp->device, rp->framebuffers[i], NULL);
+  }
+  free(rp->image_views);
+  free(rp->framebuffers);
   vkDestroyPipeline(rp->device, rp->pipeline, NULL);
   vkDestroyRenderPass(rp->device, rp->render_pass, NULL);
 }

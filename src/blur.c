@@ -42,8 +42,9 @@ int main(int argc, char **argv) {
   if (kp_init(&kp)) goto err;
   if (render_init(&r, &w)) goto err;
   render_set_active_device(&r, 0);
-  render_init_pipeline(&pipeline, &r, 0, 320, 240);
-  if (render_init_pipeline(&pipeline, &r, 0, 320, 240)) goto err;
+  if (render_init_pipeline(&pipeline, &r, render_width, render_height)) {
+    goto err;
+  }
   for (;;) {
     if (w.should_close) break;
     kp_update(&kp);
