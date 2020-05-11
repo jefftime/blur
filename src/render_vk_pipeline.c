@@ -21,6 +21,16 @@
 #include "shaders.h"
 #include <stdlib.h>
 
+/* **************************************** */
+/* render_vk_memory.c */
+int create_buffer(
+  struct render_pipeline *rp,
+  VkBuffer *out_buf,
+  size_t size,
+  VkBufferUsageFlags
+);
+/* **************************************** */
+
 static int create_shader(
   struct render_pipeline *rp,
   size_t len,
@@ -342,6 +352,67 @@ static int create_framebuffers(struct render_pipeline *rp) {
   return RENDER_ERROR_NONE;
 }
 
+static int create_command_pool(struct render_pipeline *rp) {
+  VkCommandPoolCreateInfo create_info = { 0 };
+  VkResult result;
+
+  create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+  create_info.queueFamilyIndex = (uint32_t) rp->queue_index_graphics;
+  result = vkCreateCommandPool(
+    rp->device,
+    &create_info,
+    NULL,
+    &rp->command_pool
+  );
+  if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_COMMAND_POOL;
+  return RENDER_ERROR_NONE;
+}
+
+static int create_command_buffers(struct render_pipeline *rp) {
+  VkCommandBufferAllocateInfo alloc_info = { 0 };
+  VkResult result;
+
+  rp->command_buffers =
+    malloc(sizeof(VkCommandBuffer) * rp->n_swapchain_images);
+  if (!rp->command_buffers) return RENDER_ERROR_MEMORY;
+  alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  alloc_info.commandPool = rp->command_pool;
+  alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  alloc_info.commandBufferCount = (uint32_t) rp->n_swapchain_images;
+  result = vkAllocateCommandBuffers(
+    rp->device,
+    &alloc_info,
+    rp->command_buffers
+  );
+  if (result != VK_SUCCESS) {
+    free(rp->command_buffers);
+    return RENDER_ERROR_VULKAN_COMMAND_BUFFER;
+  }
+  return RENDER_ERROR_NONE;
+}
+
+static int create_vertex_data(struct render_pipeline *rp) {
+  size_t size_verts = sizeof(float) * 6 * 4;
+  size_t size_indices = sizeof(uint16_t) * 3 * 2;
+  float vertices[] = {
+    -1.0f, -1.0f, 0.0f, 1.0, 0.0f, 0.0f,
+    -1.0f,  1.0f, 0.0f, 0.0, 1.0f, 0.0f,
+     1.0f,  1.0f, 0.0f, 1.0, 0.0f, 1.0f,
+     1.0f, -1.0f, 0.0f, 0.0, 1.0f, 0.0f
+  };
+  uint16_t indices[] = { 0, 1, 2, 2, 3, 0 };
+
+  chkerr(
+    create_buffer(
+      rp,
+      &rp->vertex_buffer,
+      size_verts,
+      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+    )
+  );
+  return RENDER_ERROR_NONE;
+}
+
 /* **************************************** */
 /* Public */
 /* **************************************** */
@@ -368,6 +439,7 @@ int render_init_pipeline(
   rp->swap_extent = r->swap_extent;
   rp->n_swapchain_images = r->n_swapchain_images;
   rp->swapchain_images = r->swapchain_images;
+  rp->queue_index_graphics = r->graphics_indices[r->active_device_index];
   chkerr(
     create_pipeline(
       rp,
@@ -378,14 +450,24 @@ int render_init_pipeline(
     )
   );
   chkerrf(create_framebuffers(rp), render_deinit_pipeline(rp));
-  /* chkerrf(create_command_pool(r), render_deinit_pipeline(rp)); */
-  /* chkerrf(create_command_buffers(r), render_deinit_pipeline(rp)); */
+  chkerrf(create_command_pool(rp), render_deinit_pipeline(rp));
+  chkerrf(create_command_buffers(rp), render_deinit_pipeline(rp));
+  chkerrf(create_vertex_data(rp), render_deinit_pipeline(rp));
   return RENDER_ERROR_NONE;
 }
 
 void render_deinit_pipeline(struct render_pipeline *rp) {
   size_t i;
 
+  vkDestroyBuffer(rp->device, rp->vertex_buffer, NULL);
+  vkFreeCommandBuffers(
+    rp->device,
+    rp->command_pool,
+    (uint32_t) rp->n_swapchain_images,
+    rp->command_buffers
+  );
+  free(rp->command_buffers);
+  vkDestroyCommandPool(rp->device, rp->command_pool, NULL);
   for (i = 0; i < rp->n_swapchain_images; ++i) {
     vkDestroyImageView(rp->device, rp->image_views[i], NULL);
     vkDestroyFramebuffer(rp->device, rp->framebuffers[i], NULL);

@@ -339,6 +339,12 @@ static int load_device_functions(struct render *r, size_t device_id) {
   load(vkDestroyImageView);
   load(vkCreateFramebuffer);
   load(vkDestroyFramebuffer);
+  load(vkCreateCommandPool);
+  load(vkDestroyCommandPool);
+  load(vkAllocateCommandBuffers);
+  load(vkFreeCommandBuffers);
+  load(vkCreateBuffer);
+  load(vkDestroyBuffer);
   return RENDER_ERROR_NONE;
 
 #undef load

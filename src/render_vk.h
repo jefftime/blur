@@ -50,6 +50,12 @@ vkfunc(vkCreateImageView);
 vkfunc(vkDestroyImageView);
 vkfunc(vkCreateFramebuffer);
 vkfunc(vkDestroyFramebuffer);
+vkfunc(vkCreateCommandPool);
+vkfunc(vkDestroyCommandPool);
+vkfunc(vkAllocateCommandBuffers);
+vkfunc(vkFreeCommandBuffers);
+vkfunc(vkCreateBuffer);
+vkfunc(vkDestroyBuffer);
 
 struct render {
   void *vklib;
@@ -79,11 +85,18 @@ struct render_pipeline {
   VkSurfaceFormatKHR format;
   VkExtent2D swap_extent;
   VkRenderPass render_pass;
+  uint32_t queue_index_graphics;
   VkPipeline pipeline;
   size_t n_swapchain_images;
   VkImage *swapchain_images;
   VkImageView *image_views;
   VkFramebuffer *framebuffers;
+  VkCommandPool command_pool;
+  VkCommandBuffer *command_buffers;
+  VkBuffer vertex_buffer;
+  VkBuffer index_buffer;
+  VkDeviceMemory vertex_memory;
+  VkDeviceMemory index_memory;
 };
 
 #undef vkfunc
