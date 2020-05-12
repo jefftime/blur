@@ -56,6 +56,25 @@ vkfunc(vkAllocateCommandBuffers);
 vkfunc(vkFreeCommandBuffers);
 vkfunc(vkCreateBuffer);
 vkfunc(vkDestroyBuffer);
+/* Command functions */
+vkfunc(vkBeginCommandBuffer);
+vkfunc(vkEndCommandBuffer);
+vkfunc(vkCmdBeginRenderPass);
+vkfunc(vkCmdEndRenderPass);
+vkfunc(vkCmdBindPipeline);
+vkfunc(vkCmdBindVertexBuffers);
+vkfunc(vkCmdBindIndexBuffer);
+vkfunc(vkCmdDrawIndexed);
+/* Memory functions */
+vkfunc(vkGetPhysicalDeviceMemoryProperties);
+vkfunc(vkGetBufferMemoryRequirements);
+vkfunc(vkAllocateMemory);
+vkfunc(vkFreeMemory);
+vkfunc(vkBindBufferMemory);
+vkfunc(vkMapMemory);
+vkfunc(vkFlushMappedMemoryRanges);
+vkfunc(vkInvalidateMappedMemoryRanges);
+vkfunc(vkUnmapMemory);
 
 struct render {
   void *vklib;

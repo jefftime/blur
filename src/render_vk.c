@@ -140,6 +140,7 @@ static int load_instance_functions(struct render *r) {
   load(vkCreateSwapchainKHR);
   load(vkDestroySwapchainKHR);
   load(vkGetSwapchainImagesKHR);
+  load(vkGetPhysicalDeviceMemoryProperties);
 #if PLATFORM_LINUX
   load(vkCreateXcbSurfaceKHR);
 #endif  /* PLATFORM_LINUX */
@@ -345,6 +346,22 @@ static int load_device_functions(struct render *r, size_t device_id) {
   load(vkFreeCommandBuffers);
   load(vkCreateBuffer);
   load(vkDestroyBuffer);
+  load(vkBeginCommandBuffer);
+  load(vkEndCommandBuffer);
+  load(vkCmdBeginRenderPass);
+  load(vkCmdEndRenderPass);
+  load(vkCmdBindPipeline);
+  load(vkCmdBindVertexBuffers);
+  load(vkCmdBindIndexBuffer);
+  load(vkCmdDrawIndexed);
+  load(vkGetBufferMemoryRequirements);
+  load(vkAllocateMemory);
+  load(vkFreeMemory);
+  load(vkBindBufferMemory);
+  load(vkMapMemory);
+  load(vkFlushMappedMemoryRanges);
+  load(vkInvalidateMappedMemoryRanges);
+  load(vkUnmapMemory);
   return RENDER_ERROR_NONE;
 
 #undef load

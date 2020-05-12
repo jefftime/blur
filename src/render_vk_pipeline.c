@@ -29,6 +29,17 @@ int create_buffer(
   size_t size,
   VkBufferUsageFlags
 );
+int alloc_buffer(
+  struct render_pipeline *rp,
+  VkBuffer buf,
+  VkDeviceMemory *out_mem
+);
+int write_data(
+  struct render_pipeline *rp,
+  VkDeviceMemory mem,
+  void *data,
+  size_t size
+);
 /* **************************************** */
 
 static int create_shader(
@@ -410,6 +421,75 @@ static int create_vertex_data(struct render_pipeline *rp) {
       VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
     )
   );
+  chkerr(
+    create_buffer(
+      rp,
+      &rp->index_buffer,
+      size_indices,
+      VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+    )
+  );
+  chkerr(alloc_buffer(rp, rp->vertex_buffer, &rp->vertex_memory));
+  chkerr(alloc_buffer(rp, rp->index_buffer, &rp->index_memory));
+  chkerr(write_data(rp, rp->vertex_memory, vertices, size_verts));
+  chkerr(write_data(rp, rp->index_memory, indices, size_verts));
+  return RENDER_ERROR_NONE;
+}
+
+static int write_buffers(struct render_pipeline *rp) {
+  size_t i;
+  VkCommandBufferBeginInfo begin_info = { 0 };
+  VkResult result;
+
+  begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  begin_info.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+  for (i = 0; i < rp->n_swapchain_images; ++i) {
+    VkRenderPassBeginInfo render_info = { 0 };
+    VkClearValue clear_value = { { { 0 } } };
+
+    result = vkBeginCommandBuffer(rp->command_buffers[i], &begin_info);
+    if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_COMMAND_BUFFER_BEGIN;
+    clear_value.color.float32[3] = 1.0f;
+    render_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    render_info.renderPass = rp->render_pass;
+    render_info.framebuffer = rp->framebuffers[i];
+    render_info.renderArea.offset.x = 0;
+    render_info.renderArea.offset.y = 0;
+    render_info.renderArea.extent = rp->swap_extent;
+    render_info.clearValueCount = 1;
+    render_info.pClearValues = &clear_value;
+    vkCmdBeginRenderPass(
+      rp->command_buffers[i],
+      &render_info,
+      VK_SUBPASS_CONTENTS_INLINE
+    );
+    {
+      VkDeviceSize offsets[] = { 0 };
+
+      vkCmdBindPipeline(
+        rp->command_buffers[i],
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        rp->pipeline
+      );
+      vkCmdBindVertexBuffers(
+        rp->command_buffers[i],
+        0,
+        1,
+        &rp->vertex_buffer,
+        offsets
+      );
+      vkCmdBindIndexBuffer(
+        rp->command_buffers[i],
+        rp->index_buffer,
+        0,
+        VK_INDEX_TYPE_UINT16
+      );
+      vkCmdDrawIndexed(rp->command_buffers[i], 6, 1, 0, 0, 0);
+    }
+    vkCmdEndRenderPass(rp->command_buffers[i]);
+    result = vkEndCommandBuffer(rp->command_buffers[i]);
+    if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_COMMAND_BUFFER_END;
+  }
   return RENDER_ERROR_NONE;
 }
 
@@ -449,10 +529,11 @@ int render_init_pipeline(
       attrs
     )
   );
-  chkerrf(create_framebuffers(rp), render_deinit_pipeline(rp));
-  chkerrf(create_command_pool(rp), render_deinit_pipeline(rp));
-  chkerrf(create_command_buffers(rp), render_deinit_pipeline(rp));
-  chkerrf(create_vertex_data(rp), render_deinit_pipeline(rp));
+  chkerr(create_framebuffers(rp));
+  chkerr(create_command_pool(rp));
+  chkerr(create_command_buffers(rp));
+  chkerr(create_vertex_data(rp));
+  chkerr(write_buffers(rp));
   return RENDER_ERROR_NONE;
 }
 
