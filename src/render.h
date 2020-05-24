@@ -19,78 +19,55 @@
 #ifndef RENDER_H
 #define RENDER_H
 
-#include "sized_types.h"
 #include "window.h"
 
-#ifdef PLATFORM_LINUX
+#ifdef RENDER_BACKEND_VULKAN
 #include "render_vk.h"
-#endif  /* PLATFORM_LINUX */
+#endif
 
 #define RENDER_ERROR_NONE 0
-#define RENDER_ERROR_MEMORY -1
-#define RENDER_ERROR_FILE -2
-#define RENDER_ERROR_NULL -3
-#define RENDER_ERROR_VULKAN_LOAD -4
-#define RENDER_ERROR_VULKAN_INSTANCE -5
-#define RENDER_ERROR_VULKAN_PREINST_LOAD -6
-#define RENDER_ERROR_VULKAN_INST_LOAD -7
-#define RENDER_ERROR_VULKAN_PHYSICAL_DEVICE -8
-#define RENDER_ERROR_VULKAN_NO_DEVICES -9
-#define RENDER_ERROR_VULKAN_INSTANCE_FUNC_LOAD -10
-#define RENDER_ERROR_VULKAN_DEVICE_FUNC_LOAD -11
-#define RENDER_ERROR_VULKAN_SURFACE -12
-#define RENDER_ERROR_VULKAN_SURFACE_CAPS_IMAGE_USAGE -13
-#define RENDER_ERROR_VULKAN_QUEUE_INDICES -14
-#define RENDER_ERROR_VULKAN_QUEUE_INDEX_MISMATCH -15
-#define RENDER_ERROR_VULKAN_CREATE_DEVICE -16
-#define RENDER_ERROR_VULKAN_SURFACE_FORMAT -17
-#define RENDER_ERROR_VULKAN_FORMAT_PROPERTIES_LINEAR -18
-#define RENDER_ERROR_VULKAN_FORMAT_PROPERTIES_OPTIMAL -19
-#define RENDER_ERROR_VULKAN_FORMAT_PROPERTIES_BUFFER -20
-#define RENDER_ERROR_VULKAN_SURFACE_CAPABILITIES -21
-#define RENDER_ERROR_VULKAN_SWAPCHAIN -22
-#define RENDER_ERROR_VULKAN_SHADER_MODULE -23
-#define RENDER_ERROR_VULKAN_SHADER_READ -24
-#define RENDER_ERROR_VULKAN_DESCRIPTOR_SET_LAYOUT -25
-#define RENDER_ERROR_VULKAN_PIPELINE_LAYOUT -26
-#define RENDER_ERROR_VULKAN_CREATE_PIPELINE -27
-#define RENDER_ERROR_VULKAN_RENDER_PASS -28
-#define RENDER_ERROR_VULKAN_SWAPCHAIN_IMAGES -29
-#define RENDER_ERROR_VULKAN_IMAGE_VIEW -30
-#define RENDER_ERROR_VULKAN_FRAMEBUFFER -31
-#define RENDER_ERROR_VULKAN_COMMAND_POOL -32
-#define RENDER_ERROR_VULKAN_COMMAND_BUFFER -33
-#define RENDER_ERROR_VULKAN_BUFFER -34
-#define RENDER_ERROR_VULKAN_MEMORY -35
-#define RENDER_ERROR_VULKAN_MEMORY_MAP -36
-#define RENDER_ERROR_VULKAN_COMMAND_BUFFER_BEGIN -37
-#define RENDER_ERROR_VULKAN_COMMAND_BUFFER_END -38
-#define RENDER_ERROR_VULKAN_SEMAPHORE -39
-#define RENDER_ERROR_VULKAN_ACQUIRE_IMAGE -40
-#define RENDER_ERROR_VULKAN_QUEUE_SUBMIT -41
-#define RENDER_ERROR_VULKAN_QUEUE_PRESENT -42
-#define RENDER_ERROR_VULKAN_ENUMERATE_INSTANCE_EXTENSIONS -43
-#define RENDER_ERROR_VULKAN_ENUMERATE_SUPPORTED_EXTENSIONS -44
-#define RENDER_ERROR_VULKAN_UNSUPPORTED_EXTENSION -45
-#define RENDER_ERROR_VULKAN_NO_DEVICE -46
+#define RENDER_ERROR_NULL -1
+#define RENDER_ERROR_MEMORY -2
+#define RENDER_ERROR_VULKAN_LOAD -3
+#define RENDER_ERROR_VULKAN_LOAD_INSTANCE_FUNCTION -4
+#define RENDER_ERROR_VULKAN_CREATE_INSTANCE -5
+#define RENDER_ERROR_VULKAN_INSTANCE_FUNCTIONS -6
+#define RENDER_ERROR_VULKAN_SURFACE -7
+#define RENDER_ERROR_VULKAN_PHYSICAL_DEVICES -8
+#define RENDER_ERROR_VULKAN_INVALID_DEVICE -9
+#define RENDER_ERROR_VULKAN_QUEUE_INDICES -10
+#define RENDER_ERROR_VULKAN_DEVICE -11
+#define RENDER_ERROR_VULKAN_DEVICE_FUNCTION -12
+#define RENDER_ERROR_VULKAN_SURFACE_CAPABILITIES -13
+#define RENDER_ERROR_VULKAN_SWAPCHAIN -14
+#define RENDER_ERROR_VULKAN_SWAPCHAIN_IMAGES -15
+#define RENDER_ERROR_VULKAN_SEMAPHORE -16
+#define RENDER_ERROR_VULKAN_PIPELINE_LAYOUT -17
+#define RENDER_ERROR_VULKAN_RENDER_PASS -18
+#define RENDER_ERROR_VULKAN_SHADER_MODULE -19
+#define RENDER_ERROR_VULKAN_GRAPHICS_PIPELINE -20
+#define RENDER_ERROR_VULKAN_PIPELINE -21
+#define RENDER_ERROR_VULKAN_IMAGE_VIEW -22
+#define RENDER_ERROR_VULKAN_FRAMEBUFFER -23
+#define RENDER_ERROR_VULKAN_COMMAND_POOL -24
+#define RENDER_ERROR_VULKAN_COMMAND_BUFFER -25
+#define RENDER_ERROR_VULKAN_BUFFER -26
+#define RENDER_ERROR_VULKAN_VERTEX_DATA -27
+#define RENDER_ERROR_VULKAN_MEMORY -28
+#define RENDER_ERROR_VULKAN_MEMORY_MAP -29
+#define RENDER_ERROR_VULKAN_COMMAND_BUFFER_BEGIN -30
+#define RENDER_ERROR_VULKAN_COMMAND_BUFFER_END -31
 
-/* **************************************** */
-/* render_<backend>.c */
-int render_init(struct render *r, struct window *w);
-void render_deinit(struct render *r);
-int render_set_active_device(struct render *r, size_t device_id);
-void render_update(struct render *r);
-/* **************************************** */
-
-/* **************************************** */
-/* render_<backend>_pipeline.c */
-int render_init_pipeline(
-  struct render_pipeline *rp,
-  struct render *r,
-  uint16_t width,
-  uint16_t height
+int render_instance_init(struct render_instance *r, struct window *w);
+void render_instance_deinit(struct render_instance *r);
+int render_device_init(
+  struct render_device *rd,
+  struct render_instance *r,
+  uint32_t device_id
 );
-void render_deinit_pipeline(struct render_pipeline *rp);
-/* **************************************** */
+void render_device_deinit(struct render_device *rd);
+int render_pipeline_init(struct render_pipeline *rp, struct render_device *rd);
+void render_pipeline_deinit(struct render_pipeline *rp);
+void render_pipeline_update(struct render_pipeline *rp);
 
 #endif

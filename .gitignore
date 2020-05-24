@@ -3,3 +3,6 @@ libs/*
 TAGS
 .projectile
 bin-asan/
+src/old-reference/
+**/#*
+**/.#*

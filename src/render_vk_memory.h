@@ -16,16 +16,27 @@
  * along with Blur.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef ERROR_H
-#define ERROR_H
+#ifndef RENDER_VK_MEMORY_H
+#define RENDER_VK_MEMORY_H
 
-#define chkerrf(expr, fail) \
-  { int err = (expr); if (err) { fail; return err; } }
+#include "render.h"
 
-#define chkerr(expr) \
-  { int err = (expr); if (err) return err; }
-
-#define chkerrg(expr, label) \
-  if ((expr)) goto label
+int create_buffer(
+  struct render_pipeline *rp,
+  VkBuffer *out_buf,
+  size_t size,
+  VkBufferUsageFlags flags
+);
+int alloc_buffer(
+  struct render_pipeline *rp,
+  VkBuffer buf,
+  VkDeviceMemory *out_mem
+);
+int write_data(
+  struct render_pipeline *rp,
+  VkDeviceMemory mem,
+  size_t size,
+  void *data
+);
 
 #endif

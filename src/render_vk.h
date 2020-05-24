@@ -1,3 +1,21 @@
+/* Copyright 2020, Jeffery Stager
+ *
+ * This file is part of Blur
+ *
+ * Blur is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Blur is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Blur.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #ifndef RENDER_VK_H
 #define RENDER_VK_H
 
@@ -5,109 +23,110 @@
 #include <vulkan/vulkan_core.h>
 #include <vulkan/vk_platform.h>
 
-#if PLATFORM_LINUX
+#ifdef PLATFORM_LINUX
+#include <xcb/xcb.h>
 #include <vulkan/vulkan_xcb.h>
 #endif
 
 #define vkfunc(F) PFN_##F F
 
+/* Instance */
 vkfunc(vkGetInstanceProcAddr);
 vkfunc(vkCreateInstance);
 vkfunc(vkDestroyInstance);
 vkfunc(vkEnumerateInstanceExtensionProperties);
-/* Physical device */
-vkfunc(vkGetPhysicalDeviceProperties);
-vkfunc(vkGetDeviceProcAddr);
-vkfunc(vkEnumeratePhysicalDevices);
+vkfunc(vkCreateXcbSurfaceKHR);
 vkfunc(vkDestroySurfaceKHR);
+vkfunc(vkEnumeratePhysicalDevices);
+vkfunc(vkGetDeviceProcAddr);
+vkfunc(vkCreateDevice);
+vkfunc(vkDestroyDevice);
 vkfunc(vkGetPhysicalDeviceQueueFamilyProperties);
 vkfunc(vkGetPhysicalDeviceSurfaceSupportKHR);
-/* Logical device */
-vkfunc(vkCreateDevice);
-vkfunc(vkGetDeviceQueue);
-vkfunc(vkDestroyDevice);
-/* Swapchain */
-vkfunc(vkGetPhysicalDeviceSurfaceFormatsKHR);
 vkfunc(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
+vkfunc(vkGetPhysicalDeviceSurfaceFormatsKHR);
+vkfunc(vkGetPhysicalDeviceSurfacePresentModesKHR);
 vkfunc(vkCreateSwapchainKHR);
 vkfunc(vkDestroySwapchainKHR);
 vkfunc(vkGetSwapchainImagesKHR);
-
-#if PLATFORM_LINUX
-vkfunc(vkCreateXcbSurfaceKHR);
-#endif
-
-/* Device functions */
-vkfunc(vkCreateShaderModule);
-vkfunc(vkDestroyShaderModule);
-vkfunc(vkCreatePipelineLayout);
-vkfunc(vkDestroyPipelineLayout);
-vkfunc(vkCreateRenderPass);
-vkfunc(vkDestroyRenderPass);
-vkfunc(vkCreateGraphicsPipelines);
-vkfunc(vkDestroyPipeline);
-vkfunc(vkCreateImageView);
-vkfunc(vkDestroyImageView);
-vkfunc(vkCreateFramebuffer);
-vkfunc(vkDestroyFramebuffer);
-vkfunc(vkCreateCommandPool);
-vkfunc(vkDestroyCommandPool);
-vkfunc(vkAllocateCommandBuffers);
-vkfunc(vkFreeCommandBuffers);
-vkfunc(vkCreateBuffer);
-vkfunc(vkDestroyBuffer);
-/* Command functions */
-vkfunc(vkBeginCommandBuffer);
-vkfunc(vkEndCommandBuffer);
-vkfunc(vkCmdBeginRenderPass);
-vkfunc(vkCmdEndRenderPass);
-vkfunc(vkCmdBindPipeline);
-vkfunc(vkCmdBindVertexBuffers);
-vkfunc(vkCmdBindIndexBuffer);
-vkfunc(vkCmdDrawIndexed);
-/* Memory functions */
 vkfunc(vkGetPhysicalDeviceMemoryProperties);
-vkfunc(vkGetBufferMemoryRequirements);
-vkfunc(vkAllocateMemory);
-vkfunc(vkFreeMemory);
-vkfunc(vkBindBufferMemory);
-vkfunc(vkMapMemory);
-vkfunc(vkFlushMappedMemoryRanges);
-vkfunc(vkInvalidateMappedMemoryRanges);
-vkfunc(vkUnmapMemory);
+vkfunc(vkGetPhysicalDeviceProperties);
 
-struct render {
-  void *vklib;
+struct render_instance {
+  void *vk_handle;
   VkInstance instance;
   VkSurfaceKHR surface;
-
-  /* Device information */
-  size_t n_devices;
-  uint32_t *graphics_indices;
-  uint32_t *present_indices;
+  size_t n_pdevices;
   VkPhysicalDevice *pdevices;
-  VkDevice *devices;
-  VkSurfaceFormatKHR *formats;
+};
 
-  /* Active device */
-  size_t active_device_index;
-  VkPhysicalDevice *active_pdevice;
-  VkDevice *active_device;
-  VkSwapchainKHR swapchain;
-  size_t n_swapchain_images;
-  VkImage *swapchain_images;
+struct render_device {
+  struct render_instance *instance;
+  uint32_t device_id;
+  uint32_t graphics_index;
+  uint32_t present_index;
+  VkDevice device;
+  VkSurfaceFormatKHR surface_format;
+  VkQueue graphics_queue;
+  VkQueue present_queue;
   VkExtent2D swap_extent;
+  VkSwapchainKHR swapchain;
+  uint32_t n_swapchain_images;
+  VkImage *swapchain_images;
+  VkSemaphore image_semaphore;
+  VkSemaphore render_semaphore;
+  VkPhysicalDeviceProperties properties;
+
+  /* Device functions */
+  vkfunc(vkGetDeviceQueue);
+  vkfunc(vkCreateSemaphore);
+  vkfunc(vkDestroySemaphore);
+  vkfunc(vkCreatePipelineLayout);
+  vkfunc(vkDestroyPipelineLayout);
+  vkfunc(vkCreateShaderModule);
+  vkfunc(vkDestroyShaderModule);
+  vkfunc(vkCreateRenderPass);
+  vkfunc(vkDestroyRenderPass);
+  vkfunc(vkCreateGraphicsPipelines);
+  vkfunc(vkDestroyPipeline);
+  vkfunc(vkCreateFramebuffer);
+  vkfunc(vkDestroyFramebuffer);
+  vkfunc(vkCreateImageView);
+  vkfunc(vkDestroyImageView);
+  vkfunc(vkCreateCommandPool);
+  vkfunc(vkDestroyCommandPool);
+  vkfunc(vkAllocateCommandBuffers);
+  vkfunc(vkFreeCommandBuffers);
+  vkfunc(vkBeginCommandBuffer);
+  vkfunc(vkEndCommandBuffer);
+  vkfunc(vkCmdBeginRenderPass);
+  vkfunc(vkCmdEndRenderPass);
+  vkfunc(vkCmdBindPipeline);
+  vkfunc(vkCmdBindVertexBuffers);
+  vkfunc(vkCmdBindIndexBuffer);
+  vkfunc(vkCmdDrawIndexed);
+  /* Memory */
+  vkfunc(vkCreateBuffer);
+  vkfunc(vkDestroyBuffer);
+  vkfunc(vkGetBufferMemoryRequirements);
+  vkfunc(vkAllocateMemory);
+  vkfunc(vkFreeMemory);
+  vkfunc(vkBindBufferMemory);
+  vkfunc(vkMapMemory);
+  vkfunc(vkFlushMappedMemoryRanges);
+  vkfunc(vkInvalidateMappedMemoryRanges);
+  vkfunc(vkUnmapMemory);
+  /* Present */
+  vkfunc(vkAcquireNextImageKHR);
+  vkfunc(vkQueueSubmit);
+  vkfunc(vkQueuePresentKHR);
+  vkfunc(vkQueueWaitIdle);
 };
 
 struct render_pipeline {
-  VkDevice device;
-  VkSurfaceFormatKHR format;
-  VkExtent2D swap_extent;
+  struct render_device *device;
   VkRenderPass render_pass;
-  uint32_t queue_index_graphics;
   VkPipeline pipeline;
-  size_t n_swapchain_images;
-  VkImage *swapchain_images;
   VkImageView *image_views;
   VkFramebuffer *framebuffers;
   VkCommandPool command_pool;
@@ -121,4 +140,3 @@ struct render_pipeline {
 #undef vkfunc
 
 #endif
-

@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.13.0 FATAL_ERROR)
 project(blur LANGUAGES C)
 
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DNDEBUG")
+
 option(PLATFORM "Set the platform build target")
 option(RENDER_BACKEND "Set the renderer backend")
 
@@ -10,8 +12,8 @@ if (NOT PLATFORM)
   set(PLATFORM "LINUX")
 endif()
 if (NOT RENDER_BACKEND)
-  message(WARNING "RENDER_BACKEND not set, defaulting to VK")
-  set(RENDER_BACKEND "VK")
+  message(WARNING "RENDER_BACKEND not set, defaulting to VULKAN")
+  set(RENDER_BACKEND "VULKAN")
 endif()
 
 string(TOLOWER ${PLATFORM} PLATFORM)
@@ -19,9 +21,9 @@ string(TOLOWER ${RENDER_BACKEND} RENDER_BACKEND)
 
 ## External libraries
 find_library(DL NAMES "dl")
-find_library(XAU NAMES "Xau" PATHS "./libs" NO_DEFAULT_PATH)
-find_library(XDMCP NAMES "Xdmcp" PATHS "./libs" NO_DEFAULT_PATH)
-find_library(XCB NAMES "xcb" PATHS "./libs" NO_DEFAULT_PATH)
+find_library(XAU NAMES "Xau" PATHS "libs" NO_DEFAULT_PATH)
+find_library(XDMCP NAMES "Xdmcp" PATHS "libs" NO_DEFAULT_PATH)
+find_library(XCB NAMES "xcb" PATHS "libs" NO_DEFAULT_PATH)
 if (NOT DL)
   message(FATAL_ERROR "Could not find libdl")
 endif()
@@ -57,10 +59,12 @@ set(SOURCES
   "src/xrand.c"
   )
 
-if (RENDER_BACKEND MATCHES "vk")
+if (RENDER_BACKEND MATCHES "vulkan")
+  set(RENDER_BACKEND "-DRENDER_BACKEND_VULKAN")
   list(APPEND SOURCES
-    "src/render_vk.c"
+    "src/render_vk_instance.c"
     "src/render_vk_memory.c"
+    "src/render_vk_device.c"
     "src/render_vk_pipeline.c"
     )
 endif()
@@ -78,4 +82,7 @@ target_compile_options(blur
 target_link_libraries(blur "-Wl,--start-group" ${EXTLIBS} "-Wl,--end-group")
 target_compile_definitions(blur
   PRIVATE ${PLATFORM_DEFINITION}
+  PRIVATE ${RENDER_BACKEND}
   )
+
+## Shaders

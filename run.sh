@@ -1,3 +1,3 @@
 #!/bin/sh -e
 
-ninja -C bin && ./bin/blur
+cd src/shaders && ../../compile_shaders.sh default && cd ../.. && ninja -C bin $@ && ./bin/blur

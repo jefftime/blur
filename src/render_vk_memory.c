@@ -16,9 +16,10 @@
  * along with Blur.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "render.h"
+#include "render_vk_memory.h"
+#include <string.h>
 
-static get_heap_index(
+static int get_heap_index(
   struct render_pipeline *rp,
   uint32_t memory_type_bit,
   VkMemoryPropertyFlags flags
@@ -26,6 +27,10 @@ static get_heap_index(
   int i;
   VkPhysicalDeviceMemoryProperties props;
 
+  vkGetPhysicalDeviceMemoryProperties(
+    rp->device->instance->pdevices[rp->device->device_id],
+    &props
+  );
   for (i = 0; i < props.memoryTypeCount; ++i) {
     if (memory_type_bit & (1U << i)) {
       if (props.memoryTypes[i].propertyFlags & flags) {
@@ -37,7 +42,7 @@ static get_heap_index(
 }
 
 /* **************************************** */
-/* Internal */
+/* Public */
 /* **************************************** */
 
 int create_buffer(
@@ -53,7 +58,12 @@ int create_buffer(
   create_info.size = size;
   create_info.usage = flags;
   create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  result = vkCreateBuffer(rp->device, &create_info, NULL, out_buf);
+  result = rp->device->vkCreateBuffer(
+    rp->device->device,
+    &create_info,
+    NULL,
+    out_buf
+  );
   if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_BUFFER;
   return RENDER_ERROR_NONE;
 }
@@ -63,12 +73,12 @@ int alloc_buffer(
   VkBuffer buf,
   VkDeviceMemory *out_mem
 ) {
-  int index;
+  int index, err = RENDER_ERROR_VULKAN_MEMORY;
   VkMemoryRequirements reqs;
   VkMemoryAllocateInfo alloc_info = { 0 };
   VkResult result;
 
-  vkGetBufferMemoryRequirements(rp->device, buf, &reqs);
+  rp->device->vkGetBufferMemoryRequirements(rp->device->device, buf, &reqs);
   alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   alloc_info.allocationSize = reqs.size;
   index = get_heap_index(
@@ -76,20 +86,31 @@ int alloc_buffer(
     reqs.memoryTypeBits,
     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
   );
-  if (index < 0) return RENDER_ERROR_VULKAN_MEMORY;
+  if (index < 0) goto err_index;
   alloc_info.memoryTypeIndex = (uint32_t) index;
-  result = vkAllocateMemory(rp->device, &alloc_info, NULL, out_mem);
-  if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_MEMORY;
-  result = vkBindBufferMemory(rp->device, buf, *out_mem, 0);
-  if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_MEMORY;
+  result = rp->device->vkAllocateMemory(
+    rp->device->device,
+    &alloc_info,
+    NULL,
+    out_mem
+  );
+  if (result != VK_SUCCESS) goto err_alloc;
+  result = rp->device->vkBindBufferMemory(rp->device->device, buf, *out_mem, 0);
+  if (result != VK_SUCCESS) goto err_bind;
   return RENDER_ERROR_NONE;
+
+ err_bind:
+  rp->device->vkFreeMemory(rp->device->device, *out_mem, NULL);
+ err_alloc:
+ err_index:
+  return err;
 }
 
 int write_data(
   struct render_pipeline *rp,
   VkDeviceMemory mem,
-  void *data,
-  size_t size
+  size_t size,
+  void *data
 ) {
   void *dst;
   VkMappedMemoryRange range = { 0 };
@@ -98,9 +119,16 @@ int write_data(
   range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
   range.memory = mem;
   range.offset = 0;
-  range.size = size;
-  result = vkMapMemory(
-    rp->device,
+  /* range.size = size; */
+  range.size =
+    (
+      size
+      + rp->device->properties.limits.nonCoherentAtomSize
+    )
+    / rp->device->properties.limits.nonCoherentAtomSize
+    * rp->device->properties.limits.nonCoherentAtomSize;
+  result = rp->device->vkMapMemory(
+    rp->device->device,
     range.memory,
     range.offset,
     range.size,
@@ -108,12 +136,14 @@ int write_data(
     &dst
   );
   if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_MEMORY_MAP;
-  memcpy(dst, data, range.size);
-  result = vkFlushMappedMemoryRanges(rp->device, 1, &range);
-  if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_MEMORY_MAP;
-  result = vkInvalidateMappedMemoryRanges(rp->device, 1, &range);
-  if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_MEMORY_MAP;
-  vkUnmapMemory(rp->device, mem);
+  memcpy(dst, data, size);
+  rp->device->vkFlushMappedMemoryRanges(rp->device->device, 1, &range);
+  rp->device->vkInvalidateMappedMemoryRanges(
+    rp->device->device,
+    1,
+    &range
+  );
+  rp->device->vkUnmapMemory(rp->device->device, mem);
   return RENDER_ERROR_NONE;
 }
 

@@ -32,37 +32,42 @@ int main(int argc, char **argv) {
     render_height = 240
   };
 
+  int err;
   struct window w;
   struct kp_ctx kp;
-  struct render r;
+  struct render_instance r;
+  struct render_device device;
   struct render_pipeline pipeline;
 
   XRAND_SEED = (uint64_t) time(NULL);
-  if (window_init(&w, "Blur", width, height)) goto err;
-  if (kp_init(&kp)) goto err;
-  if (render_init(&r, &w)) goto err;
-  render_set_active_device(&r, 0);
-  if (render_init_pipeline(&pipeline, &r, render_width, render_height)) {
-    goto err;
-  }
+  chkerrg(err = window_init(&w, "Blur", width, height), err_window);
+  chkerrg(err = kp_init(&kp), err_kp);
+  chkerrg(err = render_instance_init(&r, &w), err_render);
+  chkerrg(err = render_device_init(&device, &r, 0), err_device);
+  chkerrg(err = render_pipeline_init(&pipeline, &device), err_pipeline);
   for (;;) {
     if (w.should_close) break;
     kp_update(&kp);
     window_update(&w);
 
     if (kp_getkey_press(kp, KP_KEY_ESC)) w.should_close = 1;
-    render_update(&r);
+    render_pipeline_update(&pipeline);
   }
-  render_deinit_pipeline(&pipeline);
-  render_deinit(&r);
+  render_pipeline_deinit(&pipeline);
+  render_device_deinit(&device);
+  render_instance_deinit(&r);
   kp_deinit(&kp);
   window_deinit(&w);
   return 0;
 
- err:
-  render_deinit_pipeline(&pipeline);
-  render_deinit(&r);
+ err_pipeline:
+  render_device_deinit(&device);
+ err_device:
+  render_instance_deinit(&r);
+ err_render:
   kp_deinit(&kp);
+ err_kp:
   window_deinit(&w);
+ err_window:
   return -1;
 }
