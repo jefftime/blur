@@ -16,7 +16,7 @@
  * along with Blur.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "render_vk_memory.h"
+#include "render.h"
 #include <string.h>
 
 static int get_heap_index(
@@ -119,14 +119,14 @@ int write_data(
   range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
   range.memory = mem;
   range.offset = 0;
-  /* range.size = size; */
-  range.size =
-    (
-      size
-      + rp->device->properties.limits.nonCoherentAtomSize
-    )
-    / rp->device->properties.limits.nonCoherentAtomSize
-    * rp->device->properties.limits.nonCoherentAtomSize;
+  range.size = size;
+  /* range.size = */
+  /*   ( */
+  /*     size */
+  /*     + rp->device->properties.limits.nonCoherentAtomSize */
+  /*   ) */
+  /*   / rp->device->properties.limits.nonCoherentAtomSize */
+  /*   * rp->device->properties.limits.nonCoherentAtomSize; */
   result = rp->device->vkMapMemory(
     rp->device->device,
     range.memory,

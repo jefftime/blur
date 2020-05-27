@@ -17,11 +17,19 @@
  */
 
 #include "render.h"
-#include "render_vk_memory.h"
 #include "error.h"
 #include "shaders/vdefault.h"
 #include "shaders/fdefault.h"
 #include <stdlib.h>
+
+/* XXX: Globals for now, will be passed in later */
+VkVertexInputBindingDescription bindings[] = {
+  { 0, sizeof(float) * 6, VK_VERTEX_INPUT_RATE_VERTEX },
+};
+VkVertexInputAttributeDescription attrs[] = {
+  { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 },
+  { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 3 }
+};
 
 static int create_pipeline_layout(
   struct render_pipeline *rp,
@@ -59,10 +67,6 @@ static int create_render_pass(struct render_pipeline *rp) {
   dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
   dependency.srcAccessMask = 0;
   dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-  /* dependency.dstAccessMask = ( */
-  /*   VK_ACCESS_COLOR_ATTACHMENT_READ_BIT */
-  /*   | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT */
-  /* ); */
   attachment.format = rp->device->surface_format.format;
   attachment.samples = VK_SAMPLE_COUNT_1_BIT;
   attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -383,7 +387,7 @@ static int create_command_buffers(struct render_pipeline *rp) {
 static int create_vertex_data(struct render_pipeline *rp) {
   int err = RENDER_ERROR_VULKAN_VERTEX_DATA;
   size_t size_verts = sizeof(float) * 6 * 4;
-  size_t size_indices = sizeof(float) * 3 * 2;
+  size_t size_indices = sizeof(uint16_t) * 3 * 2;
   float vertices[] = {
     -0.5f, -0.5f, 0.0f, 1.0, 0.0f, 0.0f,
     -0.5f,  0.5f, 0.0f, 0.0, 1.0f, 0.0f,
@@ -405,7 +409,7 @@ static int create_vertex_data(struct render_pipeline *rp) {
     err = create_buffer(
       rp,
       &rp->index_buffer,
-      size_verts,
+      size_indices,
       VK_BUFFER_USAGE_INDEX_BUFFER_BIT
     ),
     err_indices
@@ -502,6 +506,107 @@ static int write_buffers(struct render_pipeline *rp) {
   return RENDER_ERROR_NONE;
 }
 
+static int teardown_swapchain(struct render_pipeline *rp) {
+  size_t i;
+
+  for (i = 0; i < rp->device->n_swapchain_images; ++i) {
+    rp->device->vkDestroyImageView(
+      rp->device->device,
+      rp->image_views[i],
+      NULL
+    );
+    rp->device->vkDestroyFramebuffer(
+      rp->device->device,
+      rp->framebuffers[i],
+      NULL
+    );
+  }
+  rp->device->vkFreeCommandBuffers(
+    rp->device->device,
+    rp->command_pool,
+    (uint32_t) rp->device->n_swapchain_images,
+    rp->command_buffers
+  );
+  rp->device->vkDestroyRenderPass(rp->device->device, rp->render_pass, NULL);
+  rp->device->vkDestroyPipeline(rp->device->device, rp->pipeline, NULL);
+  return RENDER_ERROR_NONE;
+}
+
+static int recreate_swapchain(struct render_pipeline *rp) {
+  int err = RENDER_ERROR_VULKAN_SWAPCHAIN_RECREATE;
+  size_t i;
+
+  render_device_recreate_swapchain(rp->device);
+  teardown_swapchain(rp);
+  chkerrg(
+    err = create_pipeline(
+      rp,
+      sizeof(bindings) / sizeof(bindings[0]),
+      bindings,
+      sizeof(attrs) / sizeof(attrs[0]),
+      attrs
+    ),
+    err_pipeline
+  );
+  for (i = 0; i < rp->device->n_swapchain_images; ++i) {
+    chkerrg(
+      err = create_image_view(
+        rp,
+        rp->device->swapchain_images[i],
+        rp->image_views + i
+      ),
+      err_loop_image_view
+    );
+    chkerrg(
+      err = create_framebuffer(
+        rp,
+        rp->image_views[i],
+        rp->framebuffers + i
+      ),
+      err_loop_framebuffer
+    );
+    continue;
+
+  err_loop_framebuffer:
+    rp->device->vkDestroyImageView(
+      rp->device->device,
+      rp->image_views[i],
+      NULL
+    );
+  err_loop_image_view:
+    while (i--) {
+      rp->device->vkDestroyImageView(
+        rp->device->device,
+        rp->image_views[i],
+        NULL
+      );
+      rp->device->vkDestroyFramebuffer(
+        rp->device->device,
+        rp->framebuffers[i],
+        NULL
+      );
+    }
+    goto err_loop;
+  }
+  chkerrg(err = create_command_buffers(rp), err_command_buffers);
+  chkerrg(err = write_buffers(rp), err_write_buffers);
+  return RENDER_ERROR_NONE;
+
+ err_write_buffers:
+  rp->device->vkFreeCommandBuffers(
+    rp->device->device,
+    rp->command_pool,
+    (uint32_t) rp->device->n_swapchain_images,
+    rp->command_buffers
+  );
+ err_command_buffers:
+ err_loop:
+  rp->device->vkDestroyRenderPass(rp->device->device, rp->render_pass, NULL);
+  rp->device->vkDestroyPipeline(rp->device->device, rp->pipeline, NULL);
+ err_pipeline:
+  return err;
+}
+
 /* **************************************** */
 /* Public */
 /* **************************************** */
@@ -512,13 +617,6 @@ int render_pipeline_init(
 ) {
   int err = RENDER_ERROR_VULKAN_DEVICE;
   size_t i;
-  VkVertexInputBindingDescription bindings[] = {
-    { 0, sizeof(float) * 6, VK_VERTEX_INPUT_RATE_VERTEX },
-  };
-  VkVertexInputAttributeDescription attrs[] = {
-    { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 },
-    { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 3 }
-  };
 
   if (!rp) return RENDER_ERROR_NULL;
   if (!rd) return RENDER_ERROR_NULL;
@@ -630,35 +728,14 @@ int render_pipeline_init(
 }
 
 void render_pipeline_deinit(struct render_pipeline *rp) {
-  size_t i;
-
+  teardown_swapchain(rp);
   rp->device->vkFreeMemory(rp->device->device, rp->index_memory, NULL);
   rp->device->vkFreeMemory(rp->device->device, rp->vertex_memory, NULL);
   rp->device->vkDestroyBuffer(rp->device->device, rp->index_buffer, NULL);
   rp->device->vkDestroyBuffer(rp->device->device, rp->vertex_buffer, NULL);
-  rp->device->vkFreeCommandBuffers(
-    rp->device->device,
-    rp->command_pool,
-    (uint32_t) rp->device->n_swapchain_images,
-    rp->command_buffers
-  );
   rp->device->vkDestroyCommandPool(rp->device->device, rp->command_pool, NULL);
-  for (i = 0; i < rp->device->n_swapchain_images; ++i) {
-    rp->device->vkDestroyImageView(
-      rp->device->device,
-      rp->image_views[i],
-      NULL
-    );
-    rp->device->vkDestroyFramebuffer(
-      rp->device->device,
-      rp->framebuffers[i],
-      NULL
-    );
-  }
   free(rp->image_views);
   free(rp->framebuffers);
-  rp->device->vkDestroyRenderPass(rp->device->device, rp->render_pass, NULL);
-  rp->device->vkDestroyPipeline(rp->device->device, rp->pipeline, NULL);
 }
 
 void render_pipeline_update(struct render_pipeline *rp) {
@@ -668,8 +745,9 @@ void render_pipeline_update(struct render_pipeline *rp) {
     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
   };
   VkPresentInfoKHR present_info = { 0 };
+  VkResult result;
 
-  rp->device->vkAcquireNextImageKHR(
+  result = rp->device->vkAcquireNextImageKHR(
     rp->device->device,
     rp->device->swapchain,
     (uint64_t) 2e9L,
@@ -677,6 +755,10 @@ void render_pipeline_update(struct render_pipeline *rp) {
     VK_NULL_HANDLE,
     &image_index
   );
+  if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+    recreate_swapchain(rp);
+    return;
+  }
   submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
   submit_info.waitSemaphoreCount = 1;
   submit_info.pWaitSemaphores = &rp->device->image_semaphore;
@@ -685,12 +767,15 @@ void render_pipeline_update(struct render_pipeline *rp) {
   submit_info.pCommandBuffers = rp->command_buffers + image_index;
   submit_info.signalSemaphoreCount = 1;
   submit_info.pSignalSemaphores = &rp->device->render_semaphore;
-  rp->device->vkQueueSubmit(
+  result = rp->device->vkQueueSubmit(
     rp->device->graphics_queue,
     1,
     &submit_info,
     VK_NULL_HANDLE
   );
+  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+    recreate_swapchain(rp);
+  }
   present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
   present_info.waitSemaphoreCount = 1;
   present_info.pWaitSemaphores = &rp->device->render_semaphore;

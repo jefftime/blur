@@ -121,13 +121,13 @@ static int load_instance_functions(struct render_instance *r) {
 #undef vkfunc
 }
 
-static int create_surface(struct render_instance *r, struct window *w) {
+static int create_surface(struct render_instance *r) {
   VkXcbSurfaceCreateInfoKHR create_info = { 0 };
   VkResult result;
 
   create_info.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
-  create_info.connection = w->os.cn;
-  create_info.window = w->os.wn;
+  create_info.connection = r->window->os.cn;
+  create_info.window = r->window->os.wn;
   result = vkCreateXcbSurfaceKHR(r->instance, &create_info, NULL, &r->surface);
   if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_SURFACE;
   return RENDER_ERROR_NONE;
@@ -163,11 +163,12 @@ int render_instance_init(struct render_instance *r, struct window *w) {
   if (!r) return RENDER_ERROR_NULL;
   memset(r, 0, sizeof(struct render_instance));
   n_exts = sizeof(exts) / sizeof(exts[0]);
+  r->window = w;
   chkerrg(err = load_vulkan(r), err_load_vulkan);
   chkerrg(err = load_preinstance_functions(r), err_preinstance_functions);
   chkerrg(err = create_instance(r, n_exts, exts), err_instance);
   chkerrg(err = load_instance_functions(r), err_instance_functions);
-  chkerrg(err = create_surface(r, w), err_surface);
+  chkerrg(err = create_surface(r), err_surface);
   chkerrg(err = get_devices(r), err_devices);
   return RENDER_ERROR_NONE;
 

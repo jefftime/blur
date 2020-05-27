@@ -375,3 +375,13 @@ void render_device_deinit(struct render_device *rd) {
   vkDestroySwapchainKHR(rd->device, rd->swapchain, NULL);
   vkDestroyDevice(rd->device, NULL);
 }
+
+int render_device_recreate_swapchain(struct render_device *rd) {
+  if (!rd) return RENDER_ERROR_NULL;
+  vkDestroySwapchainKHR(rd->device, rd->swapchain, NULL);
+  chkerrg(create_swapchain(rd), err_swapchain);
+  return RENDER_ERROR_NONE;
+
+ err_swapchain:
+  return RENDER_ERROR_VULKAN_SWAPCHAIN_RECREATE;
+}

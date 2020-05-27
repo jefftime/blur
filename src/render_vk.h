@@ -53,6 +53,7 @@ vkfunc(vkGetPhysicalDeviceMemoryProperties);
 vkfunc(vkGetPhysicalDeviceProperties);
 
 struct render_instance {
+  struct window *window;
   void *vk_handle;
   VkInstance instance;
   VkSurfaceKHR surface;
@@ -138,5 +139,31 @@ struct render_pipeline {
 };
 
 #undef vkfunc
+
+/* **************************************** */
+/* render_vk_device.c */
+int render_device_recreate_swapchain(struct render_device *rd);
+/* **************************************** */
+
+/* **************************************** */
+/* render_vk_memory.c */
+int create_buffer(
+  struct render_pipeline *rp,
+  VkBuffer *out_buf,
+  size_t size,
+  VkBufferUsageFlags flags
+);
+int alloc_buffer(
+  struct render_pipeline *rp,
+  VkBuffer buf,
+  VkDeviceMemory *out_mem
+);
+int write_data(
+  struct render_pipeline *rp,
+  VkDeviceMemory mem,
+  size_t size,
+  void *data
+);
+/* **************************************** */
 
 #endif
