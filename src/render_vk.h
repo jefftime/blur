@@ -138,6 +138,12 @@ struct render_pipeline {
   VkDeviceMemory index_memory;
 };
 
+struct render_data {
+  struct render_pipeline *pipeline;
+  VkBuffer vertex_buffer;
+  VkBuffer index_buffer;
+};
+
 #undef vkfunc
 
 /* **************************************** */

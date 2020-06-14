@@ -2,9 +2,20 @@
 
 # Strip the non-ANSI C comments at the top of the file from
 # glslangValidator. $1 is the name of the shader
-glslangValidator -V --vn "v$1_src" -o "v$1.h.in" "$1.vert" \
-    && glslangValidator -V --vn "f$1_src" -o "f$1.h.in" "$1.frag" \
-    && echo "$(tail -n +3 v$1.h.in)\n" > "v$1.h" \
-    && echo "$(tail -n +3 f$1.h.in)\n" > "f$1.h"
-rm "v$1.h.in" "f$1.h.in"
+vfile="$1.vert"
+ffile="$1.frag"
+v="$1_vert"
+f="$1_frag"
+vvarname="${v}_src"
+fvarname="${f}_src"
+vintermediaryfile="$v.h.in"
+fintermediaryfile="$f.h.in"
+vout="$v.h"
+fout="$f.h"
+glslangValidator -V --vn $vvarname -o $vintermediaryfile $vfile &
+glslangValidator -V --vn $fvarname -o $fintermediaryfile $ffile &
+wait
+echo "$(tail -n +3 $vintermediaryfile)\n" > $vout \
+    && echo "$(tail -n +3 $fintermediaryfile)\n" > $fout \
+    && rm $vintermediaryfile $fintermediaryfile
 

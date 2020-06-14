@@ -70,5 +70,7 @@ void render_device_deinit(struct render_device *rd);
 int render_pipeline_init(struct render_pipeline *rp, struct render_device *rd);
 void render_pipeline_deinit(struct render_pipeline *rp);
 void render_pipeline_update(struct render_pipeline *rp);
+int render_data_init(struct render_data *rd, struct render_pipeline *rp);
+void render_data_deinit(struct render_data *rd);
 
 #endif

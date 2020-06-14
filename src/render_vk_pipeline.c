@@ -18,8 +18,8 @@
 
 #include "render.h"
 #include "error.h"
-#include "shaders/vdefault.h"
-#include "shaders/fdefault.h"
+#include "shaders/default_vert.h"
+#include "shaders/default_frag.h"
 #include <stdlib.h>
 
 /* XXX: Globals for now, will be passed in later */
@@ -143,18 +143,20 @@ static int create_pipeline(
   VkGraphicsPipelineCreateInfo graphics_pipeline = { 0 };
   VkResult result;
 
-  vlen = sizeof(uint32_t) * sizeof(vdefault_src) / sizeof(vdefault_src[0]);
-  flen = sizeof(uint32_t) * sizeof(fdefault_src) / sizeof(fdefault_src[0]);
+  vlen =
+    sizeof(uint32_t) * sizeof(default_vert_src) / sizeof(default_vert_src[0]);
+  flen =
+    sizeof(uint32_t) * sizeof(default_frag_src) / sizeof(default_frag_src[0]);
 
   chkerrg(err = create_pipeline_layout(rp, &layout), err_pipeline_layout);
   chkerrg(err = create_render_pass(rp), err_render_pass);
 
   chkerrg(
-    err = create_shader(rp, vlen, (uint32_t *) vdefault_src, &vmodule),
+    err = create_shader(rp, vlen, (uint32_t *) default_vert_src, &vmodule),
     err_vmodule
   );
   chkerrg(
-    err = create_shader(rp, flen, (uint32_t *) fdefault_src, &fmodule),
+    err = create_shader(rp, flen, (uint32_t *) default_frag_src, &fmodule),
     err_fmodule
   );
   shader_info[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -209,10 +211,10 @@ static int create_pipeline(
     VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
   multisample_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
   multisample_info.sampleShadingEnable = VK_FALSE;
-  /* multisample_info.minSampleShading = 1.0f; */
-  /* multisample_info.pSampleMask = NULL; */
-  /* multisample_info.alphaToCoverageEnable = VK_FALSE; */
-  /* multisample_info.alphaToOneEnable = VK_FALSE; */
+  multisample_info.minSampleShading = 1.0f;
+  multisample_info.pSampleMask = NULL;
+  multisample_info.alphaToCoverageEnable = VK_FALSE;
+  multisample_info.alphaToOneEnable = VK_FALSE;
 
   depth_info.sType =
     VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
@@ -250,9 +252,9 @@ static int create_pipeline(
   graphics_pipeline.pViewportState = &viewport_info;
   graphics_pipeline.pRasterizationState = &raster_info;
   graphics_pipeline.pMultisampleState = &multisample_info;
-  /* graphics_pipeline.pDepthStencilState = &depth_info; */
+  graphics_pipeline.pDepthStencilState = &depth_info;
   graphics_pipeline.pColorBlendState = &color_info;
-  /* graphics_pipeline.pDynamicState = &dynamic_info; */
+  graphics_pipeline.pDynamicState = &dynamic_info;
   graphics_pipeline.layout = layout;
   graphics_pipeline.renderPass = rp->render_pass;
   graphics_pipeline.subpass = 0;
