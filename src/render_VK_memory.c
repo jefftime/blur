@@ -20,7 +20,7 @@
 #include <string.h>
 
 static int get_heap_index(
-  struct render_pipeline *rp,
+  struct render_pass *rp,
   uint32_t memory_type_bit,
   VkMemoryPropertyFlags flags
 ) {
@@ -46,7 +46,7 @@ static int get_heap_index(
 /* **************************************** */
 
 int create_buffer(
-  struct render_pipeline *rp,
+  struct render_pass *rp,
   VkBuffer *out_buf,
   size_t size,
   VkBufferUsageFlags flags
@@ -69,7 +69,7 @@ int create_buffer(
 }
 
 int alloc_buffer(
-  struct render_pipeline *rp,
+  struct render_pass *rp,
   VkBuffer buf,
   VkDeviceMemory *out_mem
 ) {
@@ -107,7 +107,7 @@ int alloc_buffer(
 }
 
 int write_data(
-  struct render_pipeline *rp,
+  struct render_pass *rp,
   VkDeviceMemory mem,
   size_t size,
   void *data

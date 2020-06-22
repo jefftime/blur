@@ -124,7 +124,7 @@ struct render_device {
   vkfunc(vkQueueWaitIdle);
 };
 
-struct render_pipeline {
+struct render_pass {
   struct render_device *device;
   VkRenderPass render_pass;
   VkPipeline pipeline;
@@ -139,9 +139,14 @@ struct render_pipeline {
 };
 
 struct render_data {
-  struct render_pipeline *pipeline;
+  struct render_pass *pipeline;
   VkBuffer vertex_buffer;
   VkBuffer index_buffer;
+};
+
+struct render_shader {
+  VkShaderModule vert_module;
+  VkShaderModule frag_module;
 };
 
 #undef vkfunc
@@ -154,18 +159,18 @@ int render_device_recreate_swapchain(struct render_device *rd);
 /* **************************************** */
 /* render_vk_memory.c */
 int create_buffer(
-  struct render_pipeline *rp,
+  struct render_pass *rp,
   VkBuffer *out_buf,
   size_t size,
   VkBufferUsageFlags flags
 );
 int alloc_buffer(
-  struct render_pipeline *rp,
+  struct render_pass *rp,
   VkBuffer buf,
   VkDeviceMemory *out_mem
 );
 int write_data(
-  struct render_pipeline *rp,
+  struct render_pass *rp,
   VkDeviceMemory mem,
   size_t size,
   void *data

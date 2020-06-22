@@ -1,8 +1,9 @@
-bin/
+blur
 libs/*
 TAGS
 .projectile
-bin-asan/
-src/old-reference/
+.depend
+*.d
+*.o
 **/#*
 **/.#*

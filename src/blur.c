@@ -37,30 +37,30 @@ int main(int argc, char **argv) {
   struct kp_ctx kp;
   struct render_instance r;
   struct render_device device;
-  struct render_pipeline pipeline;
+  struct render_pass pipeline;
 
   XRAND_SEED = (uint64_t) time(NULL);
   chkerrg(err = window_init(&w, "Blur", width, height), err_window);
   chkerrg(err = kp_init(&kp), err_kp);
   chkerrg(err = render_instance_init(&r, &w), err_render);
   chkerrg(err = render_device_init(&device, &r, 0), err_device);
-  chkerrg(err = render_pipeline_init(&pipeline, &device), err_pipeline);
+  chkerrg(err = render_pass_init(&pipeline, &device), err_pass);
   for (;;) {
     if (w.should_close) break;
     kp_update(&kp);
     window_update(&w);
 
     if (kp_getkey_press(kp, KP_KEY_ESC)) w.should_close = 1;
-    render_pipeline_update(&pipeline);
+    render_pass_update(&pipeline);
   }
-  render_pipeline_deinit(&pipeline);
+  render_pass_deinit(&pipeline);
   render_device_deinit(&device);
   render_instance_deinit(&r);
   kp_deinit(&kp);
   window_deinit(&w);
   return 0;
 
- err_pipeline:
+ err_pass:
   render_device_deinit(&device);
  err_device:
   render_instance_deinit(&r);

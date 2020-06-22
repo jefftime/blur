@@ -21,8 +21,8 @@
 
 #include "window.h"
 
-#ifdef RENDER_BACKEND_VULKAN
-#include "render_vk.h"
+#ifdef RENDER_BACKEND_VK
+#include "render_VK.h"
 #endif
 
 #define RENDER_ERROR_NONE 0
@@ -67,10 +67,10 @@ int render_device_init(
   uint32_t device_id
 );
 void render_device_deinit(struct render_device *rd);
-int render_pipeline_init(struct render_pipeline *rp, struct render_device *rd);
-void render_pipeline_deinit(struct render_pipeline *rp);
-void render_pipeline_update(struct render_pipeline *rp);
-int render_data_init(struct render_data *rd, struct render_pipeline *rp);
+int render_pass_init(struct render_pass *rp, struct render_device *rd);
+void render_pass_deinit(struct render_pass *rp);
+void render_pass_update(struct render_pass *rp);
+int render_data_init(struct render_data *rd, struct render_pass *rp);
 void render_data_deinit(struct render_data *rd);
 
 #endif

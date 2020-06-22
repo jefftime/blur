@@ -1,0 +1,8 @@
+#!/bin/sh
+
+mv render_vk_data.c render_VK_data.c
+mv render_vk_device.c render_VK_device.c
+mv render_vk_instance.c render_VK_instance.c
+mv render_vk_memory.c render_VK_memory.c
+mv render_vk_pass.c render_VK_pass.c
+mv render_vk_shader.c render_VK_shader.c
