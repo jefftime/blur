@@ -7,3 +7,4 @@ TAGS
 *.o
 **/#*
 **/.#*
+src/shaders/*.h
