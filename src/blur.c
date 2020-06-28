@@ -26,10 +26,10 @@
 
 int main(int argc, char **argv) {
   enum {
-    width = 960,
-    height = 720,
-    render_width = 320,
-    render_height = 240
+    width = 640,
+    height = 480
+    /* render_width = 320, */
+    /* render_height = 240 */
   };
 
   int err;

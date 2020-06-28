@@ -36,7 +36,6 @@ SHADER_HEADERS=$(SHADERS:=_vert.h) $(SHADERS:=_frag.h)
 all: blur
 
 $(DEP): $(SHADER_HEADERS)
-$(OBJ): .depend
 
 blur: .depend $(OBJ) $(SHADER_HEADERS)
 	@echo LINK $@

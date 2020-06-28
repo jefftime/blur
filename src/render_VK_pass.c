@@ -287,59 +287,92 @@ static int create_pipeline(
   return err;
 }
 
-static int create_image_view(
+static int create_image_views(
   struct render_pass *rp,
-  VkImage image,
-  VkImageView *out_image_view
+  size_t n_images,
+  VkImage *images,
+  VkImageView *out_image_views
 ) {
+  size_t i;
   VkImageViewCreateInfo create_info = { 0 };
   VkResult result;
 
-  create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-  create_info.image = image;
-  create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-  create_info.format = rp->device->surface_format.format;
-  create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-  create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-  create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-  create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-  create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  create_info.subresourceRange.baseMipLevel = 0;
-  create_info.subresourceRange.levelCount = 1;
-  create_info.subresourceRange.baseArrayLayer = 0;
-  create_info.subresourceRange.layerCount = 1;
-  result = rp->device->vkCreateImageView(
-    rp->device->device,
-    &create_info,
-    NULL,
-    out_image_view
-  );
-  if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_IMAGE_VIEW;
+  for (i = 0; i < n_images; ++i) {
+    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    create_info.image = images[i];
+    create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    create_info.format = rp->device->surface_format.format;
+    create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    create_info.subresourceRange.baseMipLevel = 0;
+    create_info.subresourceRange.levelCount = 1;
+    create_info.subresourceRange.baseArrayLayer = 0;
+    create_info.subresourceRange.layerCount = 1;
+    result = rp->device->vkCreateImageView(
+      rp->device->device,
+      &create_info,
+      NULL,
+      out_image_views + i
+    );
+    if (result != VK_SUCCESS) goto err_loop_image_views;
+
+    continue;
+
+  err_loop_image_views:
+    while (i--) {
+      rp->device->vkDestroyImageView(
+        rp->device->device,
+        rp->image_views[i],
+        NULL
+      );
+    }
+    return RENDER_ERROR_VULKAN_IMAGE_VIEW;
+  }
   return RENDER_ERROR_NONE;
 }
 
-static int create_framebuffer(
+static int create_framebuffers(
   struct render_pass *rp,
-  VkImageView image,
-  VkFramebuffer *out_framebuffer
+  size_t n_framebuffers,
+  VkImageView *images,
+  VkFramebuffer *out_framebuffers
 ) {
+  size_t i;
   VkFramebufferCreateInfo create_info = { 0 };
   VkResult result;
 
-  create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-  create_info.renderPass = rp->render_pass;
-  create_info.attachmentCount = 1;
-  create_info.pAttachments = &image;
-  create_info.width = rp->device->swap_extent.width;
-  create_info.height = rp->device->swap_extent.height;
-  create_info.layers = 1;
-  result = rp->device->vkCreateFramebuffer(
-    rp->device->device,
-    &create_info,
-    NULL,
-    out_framebuffer
-  );
-  if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_FRAMEBUFFER;
+  for (i = 0; i < n_framebuffers; ++i) {
+    create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    create_info.renderPass = rp->render_pass;
+    create_info.attachmentCount = 1;
+    create_info.pAttachments = images + i;
+    create_info.width = rp->device->swap_extent.width;
+    create_info.height = rp->device->swap_extent.height;
+    create_info.layers = 1;
+    result = rp->device->vkCreateFramebuffer(
+      rp->device->device,
+      &create_info,
+      NULL,
+      out_framebuffers + i
+    );
+    if (result != VK_SUCCESS) goto err_loop_framebuffer;
+
+    continue;
+
+  err_loop_framebuffer:
+    while (i--) {
+      rp->device->vkDestroyFramebuffer(
+        rp->device->device,
+        out_framebuffers[i],
+        NULL
+      );
+    }
+    return RENDER_ERROR_VULKAN_FRAMEBUFFER;
+  }
+
   return RENDER_ERROR_NONE;
 }
 
@@ -536,7 +569,6 @@ static int teardown_swapchain(struct render_pass *rp) {
 
 static int recreate_swapchain(struct render_pass *rp) {
   int err = RENDER_ERROR_VULKAN_SWAPCHAIN_RECREATE;
-  size_t i;
 
   render_device_recreate_swapchain(rp->device);
   teardown_swapchain(rp);
@@ -550,46 +582,25 @@ static int recreate_swapchain(struct render_pass *rp) {
     ),
     err_pipeline
   );
-  for (i = 0; i < rp->device->n_swapchain_images; ++i) {
-    chkerrg(
-      err = create_image_view(
-        rp,
-        rp->device->swapchain_images[i],
-        rp->image_views + i
-      ),
-      err_loop_image_view
-    );
-    chkerrg(
-      err = create_framebuffer(
-        rp,
-        rp->image_views[i],
-        rp->framebuffers + i
-      ),
-      err_loop_framebuffer
-    );
-    continue;
 
-  err_loop_framebuffer:
-    rp->device->vkDestroyImageView(
-      rp->device->device,
-      rp->image_views[i],
-      NULL
-    );
-  err_loop_image_view:
-    while (i--) {
-      rp->device->vkDestroyImageView(
-        rp->device->device,
-        rp->image_views[i],
-        NULL
-      );
-      rp->device->vkDestroyFramebuffer(
-        rp->device->device,
-        rp->framebuffers[i],
-        NULL
-      );
-    }
-    goto err_loop;
-  }
+  chkerrg(
+    err = create_image_views(
+      rp,
+      rp->device->n_swapchain_images,
+      rp->device->swapchain_images,
+      rp->image_views
+    ),
+    err_image_views
+  );
+  chkerrg(
+    err = create_framebuffers(
+      rp,
+      rp->device->n_swapchain_images,
+      rp->image_views,
+      rp->framebuffers
+    ),
+    err_framebuffers
+  );
   chkerrg(err = create_command_buffers(rp), err_command_buffers);
   chkerrg(err = write_buffers(rp), err_write_buffers);
   return RENDER_ERROR_NONE;
@@ -602,9 +613,26 @@ static int recreate_swapchain(struct render_pass *rp) {
     rp->command_buffers
   );
  err_command_buffers:
- err_loop:
-  rp->device->vkDestroyRenderPass(rp->device->device, rp->render_pass, NULL);
-  rp->device->vkDestroyPipeline(rp->device->device, rp->pipeline, NULL);
+  {
+    size_t i = rp->device->n_swapchain_images;
+
+    while (i--) rp->device->vkDestroyFramebuffer(
+      rp->device->device,
+      rp->framebuffers[i],
+      NULL
+    );
+  }
+ err_framebuffers:
+  {
+    size_t i = rp->device->n_swapchain_images;
+
+    while (i--) rp->device->vkDestroyImageView(
+      rp->device->device,
+      rp->image_views[i],
+      NULL
+    );
+  }
+ err_image_views:
  err_pipeline:
   return err;
 }
@@ -618,11 +646,11 @@ int render_pass_init(
   struct render_device *rd
 ) {
   int err = RENDER_ERROR_VULKAN_DEVICE;
-  size_t i;
 
   if (!rp) return RENDER_ERROR_NULL;
   if (!rd) return RENDER_ERROR_NULL;
   rp->device = rd;
+
   /* Pipeline */
   chkerrg(
     err = create_pipeline(
@@ -644,48 +672,24 @@ int render_pass_init(
     sizeof(VkImageView) * rp->device->n_swapchain_images
   );
   if (!rp->image_views) goto err_image_view_memory;
-
-  /* Framebuffer init */
-  for (i = 0; i < rp->device->n_swapchain_images; ++i) {
-    chkerrg(
-      err = create_image_view(
-        rp,
-        rp->device->swapchain_images[i],
-        rp->image_views + i
-      ),
-      err_loop_image_view
-    );
-    chkerrg(
-      err = create_framebuffer(
-        rp,
-        rp->image_views[i],
-        rp->framebuffers + i
-      ),
-      err_loop_framebuffer
-    );
-    continue;
-
-  err_loop_framebuffer:
-    rp->device->vkDestroyImageView(
-      rp->device->device,
-      rp->image_views[i],
-      NULL
-    );
-  err_loop_image_view:
-    while (i--) {
-      rp->device->vkDestroyImageView(
-        rp->device->device,
-        rp->image_views[i],
-        NULL
-      );
-      rp->device->vkDestroyFramebuffer(
-        rp->device->device,
-        rp->framebuffers[i],
-        NULL
-      );
-    }
-    goto err_loop;
-  }
+  chkerrg(
+    err = create_image_views(
+      rp,
+      rp->device->n_swapchain_images,
+      rp->device->swapchain_images,
+      rp->image_views
+    ),
+    err_image_views
+  );
+  chkerrg(
+    err = create_framebuffers(
+      rp,
+      rp->device->n_swapchain_images,
+      rp->image_views,
+      rp->framebuffers
+    ),
+    err_framebuffers
+  );
 
   /* Rest of init */
   chkerrg(err = create_command_pool(rp), err_command_pool);
@@ -710,22 +714,25 @@ int render_pass_init(
   rp->device->vkDestroyCommandPool(rp->device->device, rp->command_pool, NULL);
  err_command_pool:
   {
-    size_t i;
+    size_t i = rp->device->n_swapchain_images;
 
-    for (i = 0; i < rp->device->n_swapchain_images; ++i) {
-      rp->device->vkDestroyImageView(
-        rp->device->device,
-        rp->image_views[i],
-        NULL
-      );
-      rp->device->vkDestroyFramebuffer(
-        rp->device->device,
-        rp->framebuffers[i],
-        NULL
-      );
-    }
+    while (i--) rp->device->vkDestroyFramebuffer(
+      rp->device->device,
+      rp->framebuffers[i],
+      NULL
+    );
   }
- err_loop:
+ err_framebuffers:
+  {
+    size_t i = rp->device->n_swapchain_images;
+
+    while (i--) rp->device->vkDestroyImageView(
+      rp->device->device,
+      rp->image_views[i],
+      NULL
+    );
+  }
+ err_image_views:
   free(rp->image_views);
  err_image_view_memory:
   free(rp->framebuffers);
