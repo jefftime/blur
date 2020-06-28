@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.13.0 FATAL_ERROR)
-project(blur LANGUAGES C)
+project(tortuga LANGUAGES C)
 
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DNDEBUG")
 
@@ -55,7 +55,7 @@ endif()
 
 ## Sources
 set(SOURCES
-  "src/blur.c"
+  "src/tortuga.c"
   "src/xrand.c"
   )
 
@@ -69,18 +69,18 @@ if (RENDER_BACKEND MATCHES "vulkan")
     )
 endif()
 
-add_executable(blur ${SOURCES} ${PLATFORM_SOURCES})
+add_executable(tortuga ${SOURCES} ${PLATFORM_SOURCES})
 
 ## Configuration
-target_compile_options(blur
+target_compile_options(tortuga
   PRIVATE "-fcolor-diagnostics"
   PRIVATE "-std=c90"
   PRIVATE "-pedantic-errors"
   PRIVATE "-Wall"
   PRIVATE "-Wconversion"
   )
-target_link_libraries(blur "-Wl,--start-group" ${EXTLIBS} "-Wl,--end-group")
-target_compile_definitions(blur
+target_link_libraries(tortuga "-Wl,--start-group" ${EXTLIBS} "-Wl,--end-group")
+target_compile_definitions(tortuga
   PRIVATE ${PLATFORM_DEFINITION}
   PRIVATE ${RENDER_BACKEND}
   )

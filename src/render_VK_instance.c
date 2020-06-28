@@ -1,19 +1,19 @@
 /* Copyright 2020, Jeffery Stager
  *
- * This file is part of Blur
+ * This file is part of Tortuga
  *
- * Blur is free software: you can redistribute it and/or modify
+ * Tortuga is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Blur is distributed in the hope that it will be useful,
+ * Tortuga is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Blur.  If not, see <https://www.gnu.org/licenses/>.
+ * along with Tortuga.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "render.h"
@@ -72,9 +72,9 @@ static int create_instance(struct render_instance *r, size_t n_exts, char **exts
   VkResult result;
 
   app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-  app_info.pApplicationName = "Blur Test";
+  app_info.pApplicationName = "Tortuga Test";
   app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-  app_info.pEngineName = "Blur";
+  app_info.pEngineName = "Tortuga";
   app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
   app_info.apiVersion = VK_API_VERSION_1_0;
   create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;

@@ -1,3 +1,3 @@
 #!/bin/sh -e
 
-make && lldb blur
+make && lldb tortuga

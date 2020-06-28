@@ -11,7 +11,7 @@ LDFLAGS=-rdynamic
 PLATFORM=LINUX
 RENDER_BACKEND=VK
 OBJ_SUFFIX=.o
-SRC=src/blur.c \
+SRC=src/tortuga.c \
 	src/xrand.c \
 	src/render_$(RENDER_BACKEND)_instance.c \
 	src/render_$(RENDER_BACKEND)_memory.c \
@@ -33,18 +33,18 @@ LIBS=-ldl -Wl,--start-group $(STATICLIBS) -Wl,--end-group
 DEFINES=-DPLATFORM_$(PLATFORM) -DRENDER_BACKEND_$(RENDER_BACKEND)
 SHADER_HEADERS=$(SHADERS:=_vert.h) $(SHADERS:=_frag.h)
 
-all: blur
+all: tortuga
 
 $(DEP): $(SHADER_HEADERS)
 
-blur: .depend $(OBJ) $(SHADER_HEADERS)
+tortuga: .depend $(OBJ) $(SHADER_HEADERS)
 	@echo LINK $@
 	@$(CC) $(LDFLAGS) -o $@ $(OBJ) $(LIBS)
 
 clean:
 	rm -f $(OBJ)
 	rm -rf $(DEP)
-	rm -f blur
+	rm -f tortuga
 	rm -f src/shaders/*.h
 	rm .depend
 

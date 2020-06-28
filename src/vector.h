@@ -16,16 +16,7 @@
  * along with Tortuga.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef ERROR_H
-#define ERROR_H
-
-#define chkerrf(expr, fail) \
-  { int err = (expr); if (err) { fail; return err; } }
-
-#define chkerr(expr) \
-  { int err = (expr); if (err) return err; }
-
-#define chkerrg(expr, label) \
-  if ((expr)) goto label
+#ifndef VECTOR_H
+#define VECTOR_H
 
 #endif
