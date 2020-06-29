@@ -19,7 +19,8 @@ SRC=src/tortuga.c \
 	src/render_$(RENDER_BACKEND)_pass.c \
 	src/render_$(RENDER_BACKEND)_shader.c \
 	src/window_linux.c \
-	src/keypoll_linux.c
+	src/keypoll_linux.c \
+	src/vector.c
 SHADERS=src/shaders/default
 STATICLIBS=libs/libxcb.a libs/libXdmcp.a libs/libXau.a
 

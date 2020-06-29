@@ -19,4 +19,20 @@
 #ifndef VECTOR_H
 #define VECTOR_H
 
+struct vec3 {
+  float x, y, z;
+};
+
+struct vec4 {
+  float x, y, z, w;
+};
+
+void v3addv(struct vec3 *result, struct vec3 *first, struct vec3 *second);
+void v3subv(struct vec3 *result, struct vec3 *first, struct vec3 *second);
+void v3adds(struct vec3 *result, struct vec3 *v, float n);
+void v3subs(struct vec3 *result, struct vec3 *v, float n);
+void v3muls(struct vec3 *result, struct vec3 *v, float n);
+float v3dot(struct vec3 *first, struct vec3 *second);
+void v3cross(struct vec3 *result, struct vec3 *first, struct vec3 *second);
+
 #endif
