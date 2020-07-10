@@ -20,8 +20,8 @@ vec4 mega_color = vec4(1, 0, 1, 1);
 void main(void) {
   // mat4 mvp = u.projection * u.view * u.model;
   gl_Position = vec4(position, 1.0);
-  // out_color = vec4(color, 1);
+  out_color = vec4(color, 1);
   // out_color = u.color;
-  out_color = mega_color;
+  // out_color = mega_color;
 
 }

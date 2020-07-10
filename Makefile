@@ -22,6 +22,7 @@ SRC=src/tortuga.c \
 	src/keypoll_linux.c \
 	src/vector.c
 SHADERS=src/shaders/default
+EXTLIBS=-ldl
 STATICLIBS=libs/libxcb.a libs/libXdmcp.a libs/libXau.a
 
 ########################################
@@ -30,7 +31,7 @@ STATICLIBS=libs/libxcb.a libs/libXdmcp.a libs/libXau.a
 
 OBJ=$(SRC:.c=$(OBJ_SUFFIX))
 DEP=$(SRC:.c=.d)
-LIBS=-ldl -Wl,--start-group $(STATICLIBS) -Wl,--end-group
+LIBS=$(EXTLIBS) -Wl,--start-group $(STATICLIBS) -Wl,--end-group
 DEFINES=-DPLATFORM_$(PLATFORM) -DRENDER_BACKEND_$(RENDER_BACKEND)
 SHADER_HEADERS=$(SHADERS:=_vert.h) $(SHADERS:=_frag.h)
 
@@ -42,12 +43,17 @@ tortuga: .depend $(OBJ) $(SHADER_HEADERS)
 	@echo LINK $@
 	@$(CC) $(LDFLAGS) -o $@ $(OBJ) $(LIBS)
 
+tortuga-asan: .depend $(OBJ) $(SHADER_HEADERS)
+	@echo LINK $@
+	@$(CC) $(LDFLAGS) -o $@ $(OBJ) -lasan $(LIBS)
+
 clean:
-	rm -f $(OBJ)
-	rm -rf $(DEP)
-	rm -f tortuga
-	rm -f src/shaders/*.h
-	rm .depend
+	@rm -f $(OBJ)
+	@rm -rf $(DEP)
+	@rm -f tortuga
+	@rm -f tortuga-asan
+	@rm -f src/shaders/*.h
+	@rm .depend
 
 .depend: $(DEP)
 	@cat $(DEP) > .depend

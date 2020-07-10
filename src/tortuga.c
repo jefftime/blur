@@ -22,14 +22,15 @@
 #include "keypoll.h"
 #include "render.h"
 #include "xrand.h"
+#include <stdio.h>
 #include <time.h>
 
 int main(int argc, char **argv) {
   enum {
-    width = 640,
-    height = 480
-    /* render_width = 320, */
-    /* render_height = 240 */
+    WIDTH = 640,
+    HEIGHT = 480
+    /* RENDER_WIDTH = 320, */
+    /* RENDER_HEIGHT = 240 */
   };
 
   int err;
@@ -40,7 +41,7 @@ int main(int argc, char **argv) {
   struct render_pass pipeline;
 
   XRAND_SEED = (uint64_t) time(NULL);
-  chkerrg(err = window_init(&w, "Tortuga", width, height), err_window);
+  chkerrg(err = window_init(&w, "Tortuga", WIDTH, HEIGHT), err_window);
   chkerrg(err = kp_init(&kp), err_kp);
   chkerrg(err = render_instance_init(&r, &w), err_render);
   chkerrg(err = render_device_init(&device, &r, 0), err_device);

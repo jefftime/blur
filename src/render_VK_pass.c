@@ -20,7 +20,12 @@
 #include "error.h"
 #include "shaders/default_vert.h"
 #include "shaders/default_frag.h"
+#include "vector.h"
 #include <stdlib.h>
+
+struct uniforms {
+  struct vec3 color;
+};
 
 /* XXX: Globals for now, will be passed in later */
 VkVertexInputBindingDescription bindings[] = {
@@ -33,13 +38,18 @@ VkVertexInputAttributeDescription attrs[] = {
 
 static int create_pipeline_layout(
   struct render_pass *rp,
+  size_t n_desc_layouts,
+  VkDescriptorSetLayout *desc_layouts,
   VkPipelineLayout *out_layout
 ) {
   VkPipelineLayoutCreateInfo create_info = { 0 };
+  VkDescriptorSetLayoutCreateInfo layout_create_info = { 0 };
   VkResult result;
 
+  layout_create_info.bindingCount = 1;
   create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-  create_info.setLayoutCount = 0;
+  create_info.setLayoutCount = (uint32_t) n_desc_layouts;
+  create_info.pSetLayouts = desc_layouts;
   create_info.pushConstantRangeCount = 0;
   result = rp->device->vkCreatePipelineLayout(
     rp->device->device,
@@ -122,7 +132,9 @@ static int create_pipeline(
   size_t n_bindings,
   VkVertexInputBindingDescription *bindings,
   size_t n_attrs,
-  VkVertexInputAttributeDescription *attrs
+  VkVertexInputAttributeDescription *attrs,
+  size_t n_desc_layouts,
+  VkDescriptorSetLayout *desc_layouts
 ) {
   int err = RENDER_ERROR_VULKAN_GRAPHICS_PIPELINE;
   size_t vlen, flen;
@@ -148,7 +160,10 @@ static int create_pipeline(
   flen =
     sizeof(uint32_t) * sizeof(default_frag_src) / sizeof(default_frag_src[0]);
 
-  chkerrg(err = create_pipeline_layout(rp, &layout), err_pipeline_layout);
+  chkerrg(
+    err = create_pipeline_layout(rp, n_desc_layouts, desc_layouts, &layout),
+    err_pipeline_layout
+  );
   chkerrg(err = create_render_pass(rp), err_render_pass);
 
   chkerrg(
@@ -400,7 +415,7 @@ static int create_command_buffers(struct render_pass *rp) {
   rp->command_buffers = malloc(
     sizeof(VkCommandBuffer) * rp->device->n_swapchain_images
   );
-  if (!rp->command_buffers) goto err_mem_command_buffer;
+  if (!rp->command_buffers) goto err_command_buffer_memory;
   alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
   alloc_info.commandPool = rp->command_pool;
   alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -415,7 +430,7 @@ static int create_command_buffers(struct render_pass *rp) {
 
  err_command_buffer:
   free(rp->command_buffers);
- err_mem_command_buffer:
+ err_command_buffer_memory:
   return err;
 }
 
@@ -562,23 +577,24 @@ static int teardown_swapchain(struct render_pass *rp) {
     (uint32_t) rp->device->n_swapchain_images,
     rp->command_buffers
   );
+  free(rp->command_buffers);
   rp->device->vkDestroyRenderPass(rp->device->device, rp->render_pass, NULL);
   rp->device->vkDestroyPipeline(rp->device->device, rp->pipeline, NULL);
   return RENDER_ERROR_NONE;
 }
 
-static int recreate_swapchain(struct render_pass *rp) {
+static int create_pass(struct render_pass *rp) {
   int err = RENDER_ERROR_VULKAN_SWAPCHAIN_RECREATE;
 
-  render_device_recreate_swapchain(rp->device);
-  teardown_swapchain(rp);
   chkerrg(
     err = create_pipeline(
       rp,
       sizeof(bindings) / sizeof(bindings[0]),
       bindings,
       sizeof(attrs) / sizeof(attrs[0]),
-      attrs
+      attrs,
+      0,
+      NULL
     ),
     err_pipeline
   );
@@ -606,6 +622,7 @@ static int recreate_swapchain(struct render_pass *rp) {
   return RENDER_ERROR_NONE;
 
  err_write_buffers:
+  free(rp->command_buffers);
   rp->device->vkFreeCommandBuffers(
     rp->device->device,
     rp->command_pool,
@@ -637,6 +654,15 @@ static int recreate_swapchain(struct render_pass *rp) {
   return err;
 }
 
+static int recreate_swapchain(struct render_pass *rp) {
+  int err = RENDER_ERROR_VULKAN_SWAPCHAIN_RECREATE;
+
+  render_device_recreate_swapchain(rp->device);
+  teardown_swapchain(rp);
+  if ((err = create_pass(rp))) return err;
+  return RENDER_ERROR_NONE;
+}
+
 /* **************************************** */
 /* Public */
 /* **************************************** */
@@ -651,19 +677,8 @@ int render_pass_init(
   if (!rd) return RENDER_ERROR_NULL;
   rp->device = rd;
 
-  /* Pipeline */
-  chkerrg(
-    err = create_pipeline(
-      rp,
-      sizeof(bindings) / sizeof(bindings[0]),
-      bindings,
-      sizeof(attrs) / sizeof(attrs[0]),
-      attrs
-    ),
-    err_pipeline
-  );
-
-  /* Framebuffers */
+  chkerrg(err = create_command_pool(rp), err_command_pool);
+  chkerrg(err = create_vertex_data(rp), err_vertex_data);
   rp->framebuffers = malloc(
     sizeof(VkFramebuffer) * rp->device->n_swapchain_images
   );
@@ -672,74 +687,23 @@ int render_pass_init(
     sizeof(VkImageView) * rp->device->n_swapchain_images
   );
   if (!rp->image_views) goto err_image_view_memory;
-  chkerrg(
-    err = create_image_views(
-      rp,
-      rp->device->n_swapchain_images,
-      rp->device->swapchain_images,
-      rp->image_views
-    ),
-    err_image_views
-  );
-  chkerrg(
-    err = create_framebuffers(
-      rp,
-      rp->device->n_swapchain_images,
-      rp->image_views,
-      rp->framebuffers
-    ),
-    err_framebuffers
-  );
-
-  /* Rest of init */
-  chkerrg(err = create_command_pool(rp), err_command_pool);
-  chkerrg(err = create_command_buffers(rp), err_command_buffers);
-  chkerrg(err = create_vertex_data(rp), err_vertex_data);
-  chkerrg(err = write_buffers(rp), err_write_buffers);
+  chkerrg(err = create_pass(rp), err_pass);
   return RENDER_ERROR_NONE;
 
- err_write_buffers:
+ err_pass:
+  free(rp->image_views);
+ err_image_view_memory:
+  free(rp->framebuffers);
+ err_framebuffer_memory:
   rp->device->vkFreeMemory(rp->device->device, rp->index_memory, NULL);
   rp->device->vkFreeMemory(rp->device->device, rp->vertex_memory, NULL);
   rp->device->vkDestroyBuffer(rp->device->device, rp->vertex_buffer, NULL);
   rp->device->vkDestroyBuffer(rp->device->device, rp->vertex_buffer, NULL);
  err_vertex_data:
-  rp->device->vkFreeCommandBuffers(
-    rp->device->device,
-    rp->command_pool,
-    (uint32_t) rp->device->n_swapchain_images,
-    rp->command_buffers
-  );
- err_command_buffers:
-  rp->device->vkDestroyCommandPool(rp->device->device, rp->command_pool, NULL);
- err_command_pool:
-  {
-    size_t i = rp->device->n_swapchain_images;
-
-    while (i--) rp->device->vkDestroyFramebuffer(
-      rp->device->device,
-      rp->framebuffers[i],
-      NULL
-    );
-  }
- err_framebuffers:
-  {
-    size_t i = rp->device->n_swapchain_images;
-
-    while (i--) rp->device->vkDestroyImageView(
-      rp->device->device,
-      rp->image_views[i],
-      NULL
-    );
-  }
- err_image_views:
-  free(rp->image_views);
- err_image_view_memory:
-  free(rp->framebuffers);
- err_framebuffer_memory:
   rp->device->vkDestroyRenderPass(rp->device->device, rp->render_pass, NULL);
   rp->device->vkDestroyPipeline(rp->device->device, rp->pipeline, NULL);
- err_pipeline:
+  rp->device->vkDestroyCommandPool(rp->device->device, rp->command_pool, NULL);
+ err_command_pool:
   return err;
 }
 
