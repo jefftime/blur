@@ -160,12 +160,14 @@ static int create_pipeline(
   flen =
     sizeof(uint32_t) * sizeof(default_frag_src) / sizeof(default_frag_src[0]);
 
+  /* XXX: Move these out and pass them in as parameters */
   chkerrg(
     err = create_pipeline_layout(rp, n_desc_layouts, desc_layouts, &layout),
     err_pipeline_layout
   );
   chkerrg(err = create_render_pass(rp), err_render_pass);
 
+  /* XXX: Move these out and pass them in as parameters */
   chkerrg(
     err = create_shader(rp, vlen, (uint32_t *) default_vert_src, &vmodule),
     err_vmodule
@@ -583,9 +585,25 @@ static int teardown_pass(struct render_pass *rp) {
   return RENDER_ERROR_NONE;
 }
 
+static int create_descriptors(
+  struct render_pass *rp,
+  size_t *out_n_descriptors,
+  VkDescriptorSetLayout **out_descriptors
+) {
+  *out_n_descriptors = 0;
+  *out_descriptors = NULL;
+  return RENDER_ERROR_NONE;
+}
+
 static int create_pass(struct render_pass *rp) {
   int err = RENDER_ERROR_VULKAN_SWAPCHAIN_RECREATE;
+  size_t n_descriptors;
+  VkDescriptorSetLayout *descriptors;
 
+  chkerrg(
+    err = create_descriptors(rp, &n_descriptors, &descriptors),
+    err_descriptors
+  );
   chkerrg(
     err = create_pipeline(
       rp,
@@ -650,6 +668,8 @@ static int create_pass(struct render_pass *rp) {
   }
  err_image_views:
  err_pipeline:
+  free(descriptors);
+ err_descriptors:
   return err;
 }
 
@@ -657,6 +677,7 @@ static int recreate_pass(struct render_pass *rp) {
   int err = RENDER_ERROR_VULKAN_SWAPCHAIN_RECREATE;
 
   render_device_recreate_swapchain(rp->device);
+  if ((err = render_device_recreate_swapchain(rp->device))) return err;
   teardown_pass(rp);
   if ((err = create_pass(rp))) return err;
   return RENDER_ERROR_NONE;
