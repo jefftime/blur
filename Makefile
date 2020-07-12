@@ -13,11 +13,7 @@ RENDER_BACKEND=VK
 OBJ_SUFFIX=.o
 SRC=src/tortuga.c \
 	src/xrand.c \
-	src/render_$(RENDER_BACKEND)_instance.c \
-	src/render_$(RENDER_BACKEND)_memory.c \
-	src/render_$(RENDER_BACKEND)_device.c \
-	src/render_$(RENDER_BACKEND)_pass.c \
-	src/render_$(RENDER_BACKEND)_shader.c \
+	src/render.c \
 	src/window_linux.c \
 	src/keypoll_linux.c \
 	src/vector.c
@@ -67,7 +63,7 @@ include .depend
 
 .c.d:
 	@echo GEN $@
-	@$(CC) -MM -MF $@ -MQ $(@:.d=.o) $<
+	@$(CC) $(CFLAGS) $(DEFINES) -MM -MF $@ -MQ $(@:.d=.o) $<
 
 # Example:
 #   $<					 - src/shaders/default.vert

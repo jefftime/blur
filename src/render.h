@@ -22,7 +22,7 @@
 #include "window.h"
 
 #ifdef RENDER_BACKEND_VK
-#include "render_VK.h"
+#include "render_vk.h"
 #endif
 
 #define RENDER_ERROR_NONE 0
