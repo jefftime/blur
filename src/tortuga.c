@@ -70,5 +70,5 @@ int main(int argc, char **argv) {
  err_kp:
   window_deinit(&w);
  err_window:
-  return -1;
+  return err;
 }

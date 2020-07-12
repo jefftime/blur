@@ -556,7 +556,7 @@ static int write_buffers(struct render_pass *rp) {
   return RENDER_ERROR_NONE;
 }
 
-static int teardown_swapchain(struct render_pass *rp) {
+static int teardown_pass(struct render_pass *rp) {
   size_t i;
 
   for (i = 0; i < rp->device->n_swapchain_images; ++i) {
@@ -598,7 +598,6 @@ static int create_pass(struct render_pass *rp) {
     ),
     err_pipeline
   );
-
   chkerrg(
     err = create_image_views(
       rp,
@@ -654,11 +653,11 @@ static int create_pass(struct render_pass *rp) {
   return err;
 }
 
-static int recreate_swapchain(struct render_pass *rp) {
+static int recreate_pass(struct render_pass *rp) {
   int err = RENDER_ERROR_VULKAN_SWAPCHAIN_RECREATE;
 
   render_device_recreate_swapchain(rp->device);
-  teardown_swapchain(rp);
+  teardown_pass(rp);
   if ((err = create_pass(rp))) return err;
   return RENDER_ERROR_NONE;
 }
@@ -708,7 +707,7 @@ int render_pass_init(
 }
 
 void render_pass_deinit(struct render_pass *rp) {
-  teardown_swapchain(rp);
+  teardown_pass(rp);
   rp->device->vkFreeMemory(rp->device->device, rp->index_memory, NULL);
   rp->device->vkFreeMemory(rp->device->device, rp->vertex_memory, NULL);
   rp->device->vkDestroyBuffer(rp->device->device, rp->index_buffer, NULL);
@@ -736,7 +735,7 @@ void render_pass_update(struct render_pass *rp) {
     &image_index
   );
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-    recreate_swapchain(rp);
+    recreate_pass(rp);
     return;
   }
   submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -754,7 +753,7 @@ void render_pass_update(struct render_pass *rp) {
     VK_NULL_HANDLE
   );
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-    recreate_swapchain(rp);
+    recreate_pass(rp);
   }
   present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
   present_info.waitSemaphoreCount = 1;

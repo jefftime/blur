@@ -43,7 +43,7 @@ tortuga: .depend $(OBJ) $(SHADER_HEADERS)
 	@echo LINK $@
 	@$(CC) $(LDFLAGS) -o $@ $(OBJ) $(LIBS)
 
-tortuga-asan: .depend $(OBJ) $(SHADER_HEADERS)
+asan-tortuga: .depend $(OBJ) $(SHADER_HEADERS)
 	@echo LINK $@
 	@$(CC) $(LDFLAGS) -o $@ $(OBJ) -lasan $(LIBS)
 
@@ -51,7 +51,7 @@ clean:
 	@rm -f $(OBJ)
 	@rm -rf $(DEP)
 	@rm -f tortuga
-	@rm -f tortuga-asan
+	@rm -f asan-tortuga
 	@rm -f src/shaders/*.h
 	@rm .depend
 
