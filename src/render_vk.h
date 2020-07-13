@@ -106,6 +106,8 @@ struct render_device {
   vkfunc(vkCmdBindVertexBuffers);
   vkfunc(vkCmdBindIndexBuffer);
   vkfunc(vkCmdDrawIndexed);
+  vkfunc(vkCreateDescriptorSetLayout);
+  vkfunc(vkDestroyDescriptorSetLayout);
   /* Memory */
   vkfunc(vkCreateBuffer);
   vkfunc(vkDestroyBuffer);
@@ -126,6 +128,10 @@ struct render_device {
 
 struct render_pass {
   struct render_device *device;
+  size_t n_desc_layouts;
+  VkDescriptorSetLayout *desc_layouts;
+  VkBuffer *uniform_buffers;
+  VkDeviceMemory *uniform_memories;
   VkRenderPass render_pass;
   VkPipeline pipeline;
   VkImageView *image_views;

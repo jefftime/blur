@@ -38,8 +38,6 @@ VkVertexInputAttributeDescription attrs[] = {
 
 static int create_pipeline_layout(
   struct render_pass *rp,
-  size_t n_desc_layouts,
-  VkDescriptorSetLayout *desc_layouts,
   VkPipelineLayout *out_layout
 ) {
   VkPipelineLayoutCreateInfo create_info = { 0 };
@@ -48,8 +46,8 @@ static int create_pipeline_layout(
 
   layout_create_info.bindingCount = 1;
   create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-  create_info.setLayoutCount = (uint32_t) n_desc_layouts;
-  create_info.pSetLayouts = desc_layouts;
+  create_info.setLayoutCount = (uint32_t) rp->n_desc_layouts;
+  create_info.pSetLayouts = rp->desc_layouts;
   create_info.pushConstantRangeCount = 0;
   result = rp->device->vkCreatePipelineLayout(
     rp->device->device,
@@ -132,9 +130,7 @@ static int create_pipeline(
   size_t n_bindings,
   VkVertexInputBindingDescription *bindings,
   size_t n_attrs,
-  VkVertexInputAttributeDescription *attrs,
-  size_t n_desc_layouts,
-  VkDescriptorSetLayout *desc_layouts
+  VkVertexInputAttributeDescription *attrs
 ) {
   int err = RENDER_ERROR_VULKAN_GRAPHICS_PIPELINE;
   size_t vlen, flen;
@@ -162,7 +158,7 @@ static int create_pipeline(
 
   /* XXX: Move these out and pass them in as parameters */
   chkerrg(
-    err = create_pipeline_layout(rp, n_desc_layouts, desc_layouts, &layout),
+    err = create_pipeline_layout(rp, &layout),
     err_pipeline_layout
   );
   chkerrg(err = create_render_pass(rp), err_render_pass);
@@ -561,6 +557,14 @@ static int write_buffers(struct render_pass *rp) {
 static int teardown_pass(struct render_pass *rp) {
   size_t i;
 
+  for (i = 0; i < rp->n_desc_layouts; ++i) {
+    rp->device->vkDestroyDescriptorSetLayout(
+      rp->device->device,
+      rp->desc_layouts[i],
+      NULL
+    );
+  }
+  free(rp->desc_layouts);
   for (i = 0; i < rp->device->n_swapchain_images; ++i) {
     rp->device->vkDestroyImageView(
       rp->device->device,
@@ -587,22 +591,61 @@ static int teardown_pass(struct render_pass *rp) {
 
 static int create_descriptors(
   struct render_pass *rp,
-  size_t *out_n_descriptors,
-  VkDescriptorSetLayout **out_descriptors
+  size_t n_descriptors,
+  VkDescriptorSetLayout *out_descriptors
 ) {
-  *out_n_descriptors = 0;
-  *out_descriptors = NULL;
+  size_t i;
+  VkDescriptorSetLayoutBinding binding = { 0 };
+  VkDescriptorSetLayoutCreateInfo create_info = { 0 };
+  VkResult result;
+
+  binding.binding = 0;
+  binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+  binding.descriptorCount = 1;
+  binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+  create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+  create_info.bindingCount = 1;
+  create_info.pBindings = &binding;
+  for (i = 0; i < n_descriptors; ++i) {
+    result = rp->device->vkCreateDescriptorSetLayout(
+      rp->device->device,
+      &create_info,
+      NULL,
+      &out_descriptors[i]
+    );
+    if (result != VK_SUCCESS) goto err_descriptors;
+
+    continue;
+
+  err_descriptors:
+    while (i--) rp->device->vkDestroyDescriptorSetLayout(
+      rp->device->device,
+      out_descriptors[i],
+      NULL
+    );
+    return RENDER_ERROR_VULKAN_DESCRIPTOR_SET;
+  }
+  return RENDER_ERROR_NONE;
+}
+
+static int create_uniform_buffers(struct render_pass *rp) {
   return RENDER_ERROR_NONE;
 }
 
 static int create_pass(struct render_pass *rp) {
   int err = RENDER_ERROR_VULKAN_SWAPCHAIN_RECREATE;
-  size_t n_descriptors;
-  VkDescriptorSetLayout *descriptors;
 
+  /* XXX: Don't hard code number of descriptor layouts */
+  rp->desc_layouts = malloc(sizeof(VkDescriptorSetLayout));
+  if (!rp->desc_layouts) goto err_desc_layouts_memory;
+  rp->n_desc_layouts = 1;
   chkerrg(
-    err = create_descriptors(rp, &n_descriptors, &descriptors),
+    err = create_descriptors(rp, 1, rp->desc_layouts),
     err_descriptors
+  );
+  chkerrg(
+    err = create_uniform_buffers(rp),
+    err_uniform_buffers
   );
   chkerrg(
     err = create_pipeline(
@@ -610,9 +653,7 @@ static int create_pass(struct render_pass *rp) {
       sizeof(bindings) / sizeof(bindings[0]),
       bindings,
       sizeof(attrs) / sizeof(attrs[0]),
-      attrs,
-      0,
-      NULL
+      attrs
     ),
     err_pipeline
   );
@@ -668,8 +709,21 @@ static int create_pass(struct render_pass *rp) {
   }
  err_image_views:
  err_pipeline:
-  free(descriptors);
+ err_uniform_buffers:
+  {
+    size_t i;
+
+    for (i = 0; i < rp->n_desc_layouts; ++i) {
+      rp->device->vkDestroyDescriptorSetLayout(
+        rp->device->device,
+        rp->desc_layouts[i],
+        NULL
+      );
+    }
+  }
  err_descriptors:
+  free(rp->desc_layouts);
+ err_desc_layouts_memory:
   return err;
 }
 
