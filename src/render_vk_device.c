@@ -19,6 +19,7 @@
 #include "render.h"
 #include "error.h"
 #include <stdlib.h>
+#include <string.h>
 
 static int get_queue_information(struct render_device *rd) {
   int graphics_set = 0, present_set = 0;
@@ -334,11 +335,28 @@ int render_device_init(
   if (!rd) return RENDER_ERROR_NULL;
   if (!ri) return RENDER_ERROR_NULL;
   if (device_id > ri->n_pdevices) return RENDER_ERROR_VULKAN_INVALID_DEVICE;
+  memset(rd, 0, sizeof(struct render_device));
   rd->instance = ri;
   rd->device_id = device_id;
+  vkGetPhysicalDeviceProperties(
+    rd->instance->pdevices[rd->device_id],
+    &rd->properties
+  );
+  vkGetPhysicalDeviceFeatures(
+    rd->instance->pdevices[rd->device_id],
+    &rd->features
+  );
+  vkGetPhysicalDeviceMemoryProperties(
+    rd->instance->pdevices[rd->device_id],
+    &rd->memory_properties
+  );
   chkerrg(err = get_queue_information(rd), err_queue);
   chkerrg(err = create_device(rd), err_device);
   chkerrg(err = load_device_functions(rd), err_load_functions);
+  chkerrg(
+    err = render_memory_init(&rd->memory, rd, MB_TO_BYTES(256)),
+    err_memory
+  );
   chkerrg(err = create_swapchain(rd), err_swapchain);
   chkerrg(err = create_semaphores(rd), err_semaphore);
   rd->vkGetDeviceQueue(
@@ -353,16 +371,14 @@ int render_device_init(
     0,
     &rd->present_queue
   );
-  vkGetPhysicalDeviceProperties(
-    rd->instance->pdevices[rd->device_id],
-    &rd->properties
-  );
   return RENDER_ERROR_NONE;
 
  err_semaphore:
   free(rd->swapchain_images);
   vkDestroySwapchainKHR(rd->device, rd->swapchain, NULL);
  err_swapchain:
+  render_memory_deinit(&rd->memory);
+ err_memory:
  err_load_functions:
   vkDestroyDevice(rd->device, NULL);
  err_device:
@@ -371,6 +387,8 @@ int render_device_init(
 }
 
 void render_device_deinit(struct render_device *rd) {
+  rd->vkDestroyBuffer(rd->device, rd->memory.buffer, NULL);
+  rd->vkFreeMemory(rd->device, rd->memory.memory, NULL);
   rd->vkDestroySemaphore(rd->device, rd->image_semaphore, NULL);
   rd->vkDestroySemaphore(rd->device, rd->render_semaphore, NULL);
   free(rd->swapchain_images);

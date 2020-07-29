@@ -23,6 +23,7 @@
 #include "render.h"
 #include "xrand.h"
 #include <stdio.h>
+#include <wchar.h>
 #include <time.h>
 
 int main(int argc, char **argv) {
@@ -34,41 +35,41 @@ int main(int argc, char **argv) {
   };
 
   int err;
-  struct window w;
+  struct window window;
   struct kp_ctx kp;
-  struct render_instance r;
+  struct render_instance instance;
   struct render_device device;
   struct render_pass pipeline;
 
   XRAND_SEED = (uint64_t) time(NULL);
-  chkerrg(err = window_init(&w, "Tortuga", WIDTH, HEIGHT), err_window);
+  chkerrg(err = window_init(&window, "Tortuga", WIDTH, HEIGHT), err_window);
   chkerrg(err = kp_init(&kp), err_kp);
-  chkerrg(err = render_instance_init(&r, &w), err_render);
-  chkerrg(err = render_device_init(&device, &r, 0), err_device);
+  chkerrg(err = render_instance_init(&instance, &window), err_render);
+  chkerrg(err = render_device_init(&device, &instance, 0), err_device);
   chkerrg(err = render_pass_init(&pipeline, &device), err_pass);
   for (;;) {
-    if (w.should_close) break;
+    if (window.should_close) break;
     kp_update(&kp);
-    window_update(&w);
+    window_update(&window);
 
-    if (kp_getkey_press(kp, KP_KEY_ESC)) w.should_close = 1;
+    if (kp_getkey_press(kp, KP_KEY_ESC)) window.should_close = 1;
     render_pass_update(&pipeline);
   }
   render_pass_deinit(&pipeline);
   render_device_deinit(&device);
-  render_instance_deinit(&r);
+  render_instance_deinit(&instance);
   kp_deinit(&kp);
-  window_deinit(&w);
+  window_deinit(&window);
   return 0;
 
  err_pass:
   render_device_deinit(&device);
  err_device:
-  render_instance_deinit(&r);
+  render_instance_deinit(&instance);
  err_render:
   kp_deinit(&kp);
  err_kp:
-  window_deinit(&w);
+  window_deinit(&window);
  err_window:
   return err;
 }

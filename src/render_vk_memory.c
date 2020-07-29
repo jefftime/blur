@@ -17,25 +17,21 @@
  */
 
 #include "render.h"
+#include "error.h"
 #include <string.h>
 
 static int get_heap_index(
-  struct render_pass *rp,
+  struct render_device *rd,
   uint32_t memory_type_bit,
   VkMemoryPropertyFlags flags
 ) {
   int i;
   VkPhysicalDeviceMemoryProperties props;
 
-  vkGetPhysicalDeviceMemoryProperties(
-    rp->device->instance->pdevices[rp->device->device_id],
-    &props
-  );
+  props = rd->memory_properties;
   for (i = 0; i < props.memoryTypeCount; ++i) {
     if (memory_type_bit & (1U << i)) {
-      if (props.memoryTypes[i].propertyFlags & flags) {
-        return i;
-      }
+      if (props.memoryTypes[i].propertyFlags & flags) return i;
     }
   }
   return -1;
@@ -45,105 +41,187 @@ static int get_heap_index(
 /* Public */
 /* **************************************** */
 
-int create_buffer(
-  struct render_pass *rp,
-  VkBuffer *out_buf,
-  size_t size,
-  VkBufferUsageFlags flags
+int render_memory_init(
+  struct render_memory *rm,
+  struct render_device *device,
+  size_t size
 ) {
+  int index;
+  int err = RENDER_ERROR_MEMORY;
   VkBufferCreateInfo create_info = { 0 };
+  VkMemoryAllocateInfo alloc_info = { 0 };
+  VkMemoryRequirements reqs = { 0 };
   VkResult result;
 
+  if (!rm) return RENDER_ERROR_NULL;
+  if (!device) return RENDER_ERROR_NULL;
+  memset(rm, 0, sizeof(struct render_memory));
+  rm->device = device;
+  rm->size = size;
   create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-  create_info.size = size;
-  create_info.usage = flags;
   create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  result = rp->device->vkCreateBuffer(
-    rp->device->device,
+  create_info.size = size;
+  create_info.usage =
+    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+    | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+    | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+  result = device->vkCreateBuffer(
+    device->device,
     &create_info,
     NULL,
-    out_buf
+    &rm->buffer
   );
-  if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_BUFFER;
-  return RENDER_ERROR_NONE;
-}
-
-int alloc_buffer(
-  struct render_pass *rp,
-  VkBuffer buf,
-  VkDeviceMemory *out_mem
-) {
-  int index, err = RENDER_ERROR_VULKAN_MEMORY;
-  VkMemoryRequirements reqs;
-  VkMemoryAllocateInfo alloc_info = { 0 };
-  VkResult result;
-
-  rp->device->vkGetBufferMemoryRequirements(rp->device->device, buf, &reqs);
-  alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  alloc_info.allocationSize = reqs.size;
+  chkerrf(
+    result != VK_SUCCESS, {
+      err = RENDER_ERROR_VULKAN_BUFFER;
+      goto err_buffer;
+    }
+  );
+  device->vkGetBufferMemoryRequirements(device->device, rm->buffer, &reqs);
   index = get_heap_index(
-    rp,
+    device,
     reqs.memoryTypeBits,
     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
   );
-  if (index < 0) goto err_index;
+  chkerrf(
+    index < 0, {
+      err = RENDER_ERROR_VULKAN_MEMORY;
+      goto err_index;
+    }
+  );
+  alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  alloc_info.allocationSize = reqs.size;
   alloc_info.memoryTypeIndex = (uint32_t) index;
-  result = rp->device->vkAllocateMemory(
-    rp->device->device,
+  result = device->vkAllocateMemory(
+    device->device,
     &alloc_info,
     NULL,
-    out_mem
+    &rm->memory
   );
-  if (result != VK_SUCCESS) goto err_alloc;
-  result = rp->device->vkBindBufferMemory(rp->device->device, buf, *out_mem, 0);
-  if (result != VK_SUCCESS) goto err_bind;
+  chkerrf(
+    result != VK_SUCCESS, {
+      err = RENDER_ERROR_VULKAN_MEMORY;
+      goto err_memory;
+    }
+  );
   return RENDER_ERROR_NONE;
 
- err_bind:
-  rp->device->vkFreeMemory(rp->device->device, *out_mem, NULL);
- err_alloc:
+ err_memory:
  err_index:
+  device->vkDestroyBuffer(device->device, rm->buffer, NULL);
+ err_buffer:
   return err;
 }
 
-int write_data(
-  struct render_pass *rp,
-  VkDeviceMemory mem,
+void render_memory_deinit(struct render_memory *rm) {
+  if (!rm) return;
+  rm->device->vkDestroyBuffer(rm->device->device, rm->buffer, NULL);
+  rm->device->vkFreeMemory(rm->device->device, rm->memory, NULL);
+}
+
+/* XXX: Implement */
+void render_memory_reset(struct render_memory *rm) {}
+
+int render_memory_create_buffer(
+  struct render_memory *rm,
+  size_t align,
+  VkBufferUsageFlags usage,
+  size_t size,
+  struct render_buffer *out_buffer
+) {
+  size_t next_offset;
+  VkBufferCreateInfo create_info = { 0 };
+  VkResult result;
+
+  if (!out_buffer) return RENDER_ERROR_NULL;
+  create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  create_info.size = size;
+  create_info.usage = usage;
+  result = rm->device->vkCreateBuffer(
+    rm->device->device,
+    &create_info,
+    NULL,
+    &out_buffer->buffer
+  );
+  chkerrg(result != VK_SUCCESS, err_buffer);
+  next_offset =
+    (rm->offset % align)        /* Are we unaligned? */
+    ? rm->offset + (align - (rm->offset % align))
+    : rm->offset;
+  result = rm->device->vkBindBufferMemory(
+    rm->device->device,
+    out_buffer->buffer,
+    rm->memory,
+    (rm->offset % align) + rm->offset
+  );
+  chkerrg(result != VK_SUCCESS, err_bind);
+  rm->offset += next_offset + size;
+  out_buffer->offset = next_offset;
+  out_buffer->size = size;
+  out_buffer->memory = rm;
+  return RENDER_ERROR_NONE;
+
+ err_bind:
+  rm->device->vkDestroyBuffer(rm->device->device, out_buffer->buffer, NULL);
+ err_buffer:
+  return RENDER_ERROR_VULKAN_BUFFER;
+}
+
+void render_buffer_destroy(struct render_buffer *rb) {
+  if (!rb) return;
+  rb->memory->device->vkDestroyBuffer(
+    rb->memory->device->device,
+    rb->buffer,
+    NULL
+  );
+  /* TODO: update parent memory that this buffer has been freed */
+}
+
+int render_buffer_write(
+  struct render_buffer *rb,
   size_t size,
   void *data
 ) {
-  void *dst;
+  unsigned char *dst;
+  size_t align, begin, len;
   VkMappedMemoryRange range = { 0 };
   VkResult result;
 
+  if (!rb) return RENDER_ERROR_NULL;
+  /* Vulkan spec states there are restrictions on memory mapping,
+   * so we need to ensure begin and len are aligned properly */
+  align = rb->memory->device->properties.limits.nonCoherentAtomSize;
+  begin = rb->offset - (rb->offset % align);
+  len = size + (align - (size % align));
   range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-  range.memory = mem;
-  range.offset = 0;
-  range.size = size;
-  /* range.size = */
-  /*   ( */
-  /*     size */
-  /*     + rp->device->properties.limits.nonCoherentAtomSize */
-  /*   ) */
-  /*   / rp->device->properties.limits.nonCoherentAtomSize */
-  /*   * rp->device->properties.limits.nonCoherentAtomSize; */
-  result = rp->device->vkMapMemory(
-    rp->device->device,
+  range.memory = rb->memory->memory;
+  range.offset = begin;
+  range.size = len;
+  result = rb->memory->device->vkMapMemory(
+    rb->memory->device->device,
     range.memory,
     range.offset,
     range.size,
     0,
-    &dst
+    (void **) &dst
   );
   if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_MEMORY_MAP;
-  memcpy(dst, data, size);
-  rp->device->vkFlushMappedMemoryRanges(rp->device->device, 1, &range);
-  rp->device->vkInvalidateMappedMemoryRanges(
-    rp->device->device,
+  memcpy(dst + (rb->offset - begin), data, size);
+  rb->memory->device->vkFlushMappedMemoryRanges(
+    rb->memory->device->device,
     1,
     &range
   );
-  rp->device->vkUnmapMemory(rp->device->device, mem);
+  rb->memory->device->vkInvalidateMappedMemoryRanges(
+    rb->memory->device->device,
+    1,
+    &range
+  );
+  rb->memory->device->vkUnmapMemory(
+    rb->memory->device->device,
+    rb->memory->memory
+  );
   return RENDER_ERROR_NONE;
 }
 

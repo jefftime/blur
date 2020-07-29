@@ -59,6 +59,7 @@
 #define RENDER_ERROR_VULKAN_COMMAND_BUFFER_END -31
 #define RENDER_ERROR_VULKAN_SWAPCHAIN_RECREATE -32
 #define RENDER_ERROR_VULKAN_DESCRIPTOR_SET -33
+#define RENDER_ERROR_VULKAN_UNIFORM_BUFFERS -34
 
 int render_instance_init(struct render_instance *r, struct window *w);
 void render_instance_deinit(struct render_instance *r);
@@ -71,7 +72,5 @@ void render_device_deinit(struct render_device *rd);
 int render_pass_init(struct render_pass *rp, struct render_device *rd);
 void render_pass_deinit(struct render_pass *rp);
 void render_pass_update(struct render_pass *rp);
-int render_data_init(struct render_data *rd, struct render_pass *rp);
-void render_data_deinit(struct render_data *rd);
 
 #endif

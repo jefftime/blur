@@ -29,6 +29,7 @@
 #endif
 
 #define vkfunc(F) PFN_##F F
+#define MB_TO_BYTES(n) (n * 1024 * 1024)
 
 /* Instance */
 vkfunc(vkGetInstanceProcAddr);
@@ -51,6 +52,11 @@ vkfunc(vkDestroySwapchainKHR);
 vkfunc(vkGetSwapchainImagesKHR);
 vkfunc(vkGetPhysicalDeviceMemoryProperties);
 vkfunc(vkGetPhysicalDeviceProperties);
+vkfunc(vkGetPhysicalDeviceFeatures);
+
+enum {
+  RENDER_ZONE_SIZE = MB_TO_BYTES(256)
+};
 
 struct render_instance {
   struct window *window;
@@ -59,6 +65,21 @@ struct render_instance {
   VkSurfaceKHR surface;
   size_t n_pdevices;
   VkPhysicalDevice *pdevices;
+};
+
+struct render_memory {
+  struct render_device *device;
+  size_t size;
+  size_t offset;
+  VkBuffer buffer;
+  VkDeviceMemory memory;
+};
+
+struct render_buffer {
+  struct render_memory *memory;
+  size_t offset;
+  size_t size;
+  VkBuffer buffer;
 };
 
 struct render_device {
@@ -77,6 +98,9 @@ struct render_device {
   VkSemaphore image_semaphore;
   VkSemaphore render_semaphore;
   VkPhysicalDeviceProperties properties;
+  VkPhysicalDeviceFeatures features;
+  VkPhysicalDeviceMemoryProperties memory_properties;
+  struct render_memory memory;
 
   /* Device functions */
   vkfunc(vkGetDeviceQueue);
@@ -131,23 +155,15 @@ struct render_pass {
   size_t n_desc_layouts;
   VkDescriptorSetLayout *desc_layouts;
   VkBuffer *uniform_buffers;
-  VkDeviceMemory *uniform_memories;
+  VkDeviceMemory uniform_memory;
   VkRenderPass render_pass;
   VkPipeline pipeline;
   VkImageView *image_views;
   VkFramebuffer *framebuffers;
   VkCommandPool command_pool;
   VkCommandBuffer *command_buffers;
-  VkBuffer vertex_buffer;
-  VkBuffer index_buffer;
-  VkDeviceMemory vertex_memory;
-  VkDeviceMemory index_memory;
-};
-
-struct render_data {
-  struct render_pass *pipeline;
-  VkBuffer vertex_buffer;
-  VkBuffer index_buffer;
+  struct render_buffer vertices;
+  struct render_buffer indices;
 };
 
 struct render_shader {
@@ -164,20 +180,23 @@ int render_device_recreate_swapchain(struct render_device *rd);
 
 /* **************************************** */
 /* render_vk_memory.c */
-int create_buffer(
-  struct render_pass *rp,
-  VkBuffer *out_buf,
+int render_memory_init(
+  struct render_memory *rm,
+  struct render_device *rd,
+  size_t size
+);
+void render_memory_deinit(struct render_memory *rm);
+void render_memory_reset(struct render_memory *memory);
+int render_memory_create_buffer(
+  struct render_memory *rm,
+  size_t align,
+  VkBufferUsageFlags usage,
   size_t size,
-  VkBufferUsageFlags flags
+  struct render_buffer *out_buffer
 );
-int alloc_buffer(
-  struct render_pass *rp,
-  VkBuffer buf,
-  VkDeviceMemory *out_mem
-);
-int write_data(
-  struct render_pass *rp,
-  VkDeviceMemory mem,
+void render_buffer_destroy(struct render_buffer *rb);
+int render_buffer_write(
+  struct render_buffer *rb,
   size_t size,
   void *data
 );

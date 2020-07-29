@@ -116,6 +116,7 @@ static int load_instance_functions(struct render_instance *r) {
   vkfunc(vkGetSwapchainImagesKHR);
   vkfunc(vkGetPhysicalDeviceMemoryProperties);
   vkfunc(vkGetPhysicalDeviceProperties);
+  vkfunc(vkGetPhysicalDeviceFeatures);
   return RENDER_ERROR_NONE;
 
 #undef vkfunc
