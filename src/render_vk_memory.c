@@ -71,24 +71,20 @@ int render_memory_init(
     NULL,
     &rm->buffer
   );
-  chkerrf(
-    result != VK_SUCCESS, {
-      err = RENDER_ERROR_VULKAN_BUFFER;
-      goto err_buffer;
-    }
-  );
+  if (result != VK_SUCCESS) {
+    err = RENDER_ERROR_VULKAN_BUFFER;
+    goto err_buffer;
+  }
   device->vkGetBufferMemoryRequirements(device->device, rm->buffer, &reqs);
   index = get_heap_index(
     device,
     reqs.memoryTypeBits,
     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
   );
-  chkerrf(
-    index < 0, {
-      err = RENDER_ERROR_VULKAN_MEMORY;
-      goto err_index;
-    }
-  );
+  if (index < 0) {
+    err = RENDER_ERROR_VULKAN_MEMORY;
+    goto err_index;
+  }
   alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   alloc_info.allocationSize = reqs.size;
   alloc_info.memoryTypeIndex = (uint32_t) index;
