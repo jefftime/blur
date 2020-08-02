@@ -331,6 +331,7 @@ int render_device_init(
   uint32_t device_id
 ) {
   int err;
+  VkBufferUsageFlags usage_flags;
 
   if (!rd) return RENDER_ERROR_NULL;
   if (!ri) return RENDER_ERROR_NULL;
@@ -353,8 +354,17 @@ int render_device_init(
   chkerrg(err = get_queue_information(rd), err_queue);
   chkerrg(err = create_device(rd), err_device);
   chkerrg(err = load_device_functions(rd), err_load_functions);
+  usage_flags =
+    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+    | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+    | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
   chkerrg(
-    err = render_memory_init(&rd->memory, rd, MB_TO_BYTES(256)),
+    err = render_memory_init(
+      &rd->memory,
+      rd,
+      usage_flags,
+      MB_TO_BYTES(2)
+    ),
     err_memory
   );
   chkerrg(err = create_swapchain(rd), err_swapchain);
@@ -398,6 +408,7 @@ void render_device_deinit(struct render_device *rd) {
 
 int render_device_recreate_swapchain(struct render_device *rd) {
   if (!rd) return RENDER_ERROR_NULL;
+  free(rd->swapchain_images);
   vkDestroySwapchainKHR(rd->device, rd->swapchain, NULL);
   chkerrg(create_swapchain(rd), err_swapchain);
   return RENDER_ERROR_NONE;

@@ -130,6 +130,7 @@ struct render_device {
   vkfunc(vkCmdBindVertexBuffers);
   vkfunc(vkCmdBindIndexBuffer);
   vkfunc(vkCmdDrawIndexed);
+  vkfunc(vkCreateDescriptorPool); /* ?? */
   vkfunc(vkCreateDescriptorSetLayout);
   vkfunc(vkDestroyDescriptorSetLayout);
   /* Memory */
@@ -154,16 +155,16 @@ struct render_pass {
   struct render_device *device;
   size_t n_desc_layouts;
   VkDescriptorSetLayout *desc_layouts;
-  VkBuffer *uniform_buffers;
-  VkDeviceMemory uniform_memory;
   VkRenderPass render_pass;
   VkPipeline pipeline;
   VkImageView *image_views;
   VkFramebuffer *framebuffers;
   VkCommandPool command_pool;
   VkCommandBuffer *command_buffers;
+  struct render_memory uniform_memory;
   struct render_buffer vertices;
   struct render_buffer indices;
+  struct render_buffer *uniforms;
 };
 
 struct render_shader {
@@ -183,6 +184,7 @@ int render_device_recreate_swapchain(struct render_device *rd);
 int render_memory_init(
   struct render_memory *rm,
   struct render_device *rd,
+  VkBufferUsageFlags usage,
   size_t size
 );
 void render_memory_deinit(struct render_memory *rm);

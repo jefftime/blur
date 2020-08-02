@@ -44,6 +44,7 @@ static int get_heap_index(
 int render_memory_init(
   struct render_memory *rm,
   struct render_device *device,
+  VkBufferUsageFlags usage,
   size_t size
 ) {
   int index;
@@ -61,10 +62,7 @@ int render_memory_init(
   create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
   create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   create_info.size = size;
-  create_info.usage =
-    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
-    | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
-    | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+  create_info.usage = usage;
   result = device->vkCreateBuffer(
     device->device,
     &create_info,
@@ -80,6 +78,7 @@ int render_memory_init(
     device,
     reqs.memoryTypeBits,
     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+    | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
   );
   if (index < 0) {
     err = RENDER_ERROR_VULKAN_MEMORY;
@@ -115,8 +114,9 @@ void render_memory_deinit(struct render_memory *rm) {
   rm->device->vkFreeMemory(rm->device->device, rm->memory, NULL);
 }
 
-/* XXX: Implement */
-void render_memory_reset(struct render_memory *rm) {}
+void render_memory_reset(struct render_memory *rm) {
+  rm->offset = 0;
+}
 
 int render_memory_create_buffer(
   struct render_memory *rm,
@@ -127,6 +127,7 @@ int render_memory_create_buffer(
 ) {
   size_t next_offset;
   VkBufferCreateInfo create_info = { 0 };
+  VkMemoryRequirements reqs = { 0 };
   VkResult result;
 
   if (!out_buffer) return RENDER_ERROR_NULL;
@@ -141,6 +142,12 @@ int render_memory_create_buffer(
     &out_buffer->buffer
   );
   chkerrg(result != VK_SUCCESS, err_buffer);
+  rm->device->vkGetBufferMemoryRequirements(
+    rm->device->device,
+    out_buffer->buffer,
+    &reqs
+  );
+  align = (align < reqs.alignment) ? reqs.alignment : align;
   next_offset =
     (rm->offset % align)        /* Are we unaligned? */
     ? rm->offset + (align - (rm->offset % align))
@@ -149,10 +156,10 @@ int render_memory_create_buffer(
     rm->device->device,
     out_buffer->buffer,
     rm->memory,
-    (rm->offset % align) + rm->offset
+    next_offset
   );
   chkerrg(result != VK_SUCCESS, err_bind);
-  rm->offset += next_offset + size;
+  rm->offset = next_offset + size;
   out_buffer->offset = next_offset;
   out_buffer->size = size;
   out_buffer->memory = rm;
