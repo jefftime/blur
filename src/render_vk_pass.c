@@ -286,7 +286,7 @@ static int create_pipeline(
   if (result != VK_SUCCESS) goto err_graphics_pipeline;
   rp->device->vkDestroyShaderModule(rp->device->device, vmodule, NULL);
   rp->device->vkDestroyShaderModule(rp->device->device, fmodule, NULL);
-  rp->device->vkDestroyPipelineLayout(rp->device->device, layout, NULL);
+  rp->pipeline_layout = layout;
 
   return RENDER_ERROR_NONE;
 
@@ -626,6 +626,16 @@ static int write_buffers(struct render_pass *rp) {
         VK_PIPELINE_BIND_POINT_GRAPHICS,
         rp->pipeline
       );
+      rp->device->vkCmdBindDescriptorSets(
+        rp->command_buffers[i],
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        rp->pipeline_layout,
+        0,
+        1,
+        &rp->desc_sets[i],
+        0,
+        NULL
+      );
       rp->device->vkCmdBindVertexBuffers(
         rp->command_buffers[i],
         0,
@@ -664,6 +674,7 @@ static int teardown_pass(struct render_pass *rp) {
     );
   }
   free(rp->desc_layouts);
+  free(rp->desc_sets);
 
   rp->device->vkDestroyDescriptorPool(rp->device->device, rp->desc_pool, NULL);
 
@@ -689,6 +700,11 @@ static int teardown_pass(struct render_pass *rp) {
   free(rp->command_buffers);
   rp->device->vkDestroyRenderPass(rp->device->device, rp->render_pass, NULL);
   rp->device->vkDestroyPipeline(rp->device->device, rp->pipeline, NULL);
+  rp->device->vkDestroyPipelineLayout(
+    rp->device->device,
+    rp->pipeline_layout,
+    NULL
+  );
 
   return RENDER_ERROR_NONE;
 }
@@ -779,6 +795,8 @@ static int create_pass(struct render_pass *rp) {
   for (i = 0; i < rp->device->n_swapchain_images; ++i) {
     struct uniforms data = { 0 };
 
+    data.color.x = 1.0;
+    data.color.y = 1.0;
     render_buffer_write(
       &rp->uniforms[i],
       sizeof(struct uniforms),

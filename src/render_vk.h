@@ -138,6 +138,7 @@ struct render_device {
   vkfunc(vkAllocateDescriptorSets);
   vkfunc(vkFreeDescriptorSets);
   vkfunc(vkUpdateDescriptorSets);
+  vkfunc(vkCmdBindDescriptorSets);
   /* Memory */
   vkfunc(vkCreateBuffer);
   vkfunc(vkDestroyBuffer);
@@ -164,6 +165,7 @@ struct render_pass {
   VkDescriptorSet *desc_sets;
   VkRenderPass render_pass;
   VkPipeline pipeline;
+  VkPipelineLayout pipeline_layout;
   VkImageView *image_views;
   VkFramebuffer *framebuffers;
   VkCommandPool command_pool;

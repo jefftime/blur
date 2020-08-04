@@ -151,6 +151,7 @@ static int load_device_functions(struct render_device *rd) {
   vkfunc(vkAllocateDescriptorSets);
   vkfunc(vkFreeDescriptorSets);
   vkfunc(vkUpdateDescriptorSets);
+  vkfunc(vkCmdBindDescriptorSets);
   /* Memory */
   vkfunc(vkCreateBuffer);
   vkfunc(vkDestroyBuffer);
