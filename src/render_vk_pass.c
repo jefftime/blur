@@ -28,7 +28,7 @@ struct uniforms {
   struct vec3 color;
 };
 
-/* XXX: Globals for now, will be passed in later */
+/* TODO: Globals for now, will be passed in later */
 VkVertexInputBindingDescription bindings[] = {
   { 0, sizeof(float) * 6, VK_VERTEX_INPUT_RATE_VERTEX }
 };
@@ -37,6 +37,7 @@ VkVertexInputAttributeDescription attrs[] = {
   { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 3 }
 };
 
+/* TODO: Refactor to pass in descriptor set layouts */
 static int create_pipeline_layout(
   struct render_pass *rp,
   VkPipelineLayout *out_layout
@@ -157,14 +158,14 @@ static int create_pipeline(
   flen =
     sizeof(uint32_t) * sizeof(default_frag_src) / sizeof(default_frag_src[0]);
 
-  /* XXX: Move these out and pass them in as parameters */
+  /* TODO: Move these out and pass them in as parameters */
   chkerrg(
     err = create_pipeline_layout(rp, &layout),
     err_pipeline_layout
   );
   chkerrg(err = create_render_pass(rp), err_render_pass);
 
-  /* XXX: Move these out and pass them in as parameters */
+  /* TODO: Move these out and pass them in as parameters */
   chkerrg(
     err = create_shader(rp, vlen, (uint32_t *) default_vert_src, &vmodule),
     err_vmodule
@@ -390,6 +391,70 @@ static int create_framebuffers(
   return RENDER_ERROR_NONE;
 }
 
+/* TODO: Pass in descriptor layouts instead of relying on rp to have them */
+static int create_descriptor_sets(struct render_pass *rp) {
+  size_t i;
+  VkDescriptorSetAllocateInfo alloc_info = { 0 };
+  VkDescriptorSetLayout *layouts;
+  VkResult result;
+
+  layouts =
+    malloc(sizeof(VkDescriptorSetLayout) * rp->device->n_swapchain_images);
+  if (!layouts) goto err_layouts_memory;
+  for (i = 0; i < rp->device->n_swapchain_images; ++i) {
+    layouts[i] = rp->desc_layouts[0];
+  }
+  rp->desc_sets =
+    malloc(sizeof(VkDescriptorSet) * rp->device->n_swapchain_images);
+  if (!rp->desc_sets) goto err_desc_memory;
+  alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+  alloc_info.descriptorPool = rp->desc_pool;
+  alloc_info.descriptorSetCount = (uint32_t) rp->device->n_swapchain_images;
+  alloc_info.pSetLayouts = layouts;
+  result = rp->device->vkAllocateDescriptorSets(
+    rp->device->device,
+    &alloc_info,
+    rp->desc_sets
+  );
+  if (result != VK_SUCCESS) goto err_desc_sets;
+  free(layouts);
+  return RENDER_ERROR_NONE;
+
+ err_desc_sets:
+  free(rp->desc_sets);
+ err_desc_memory:
+  free(layouts);
+ err_layouts_memory:
+  return RENDER_ERROR_VULKAN_DESCRIPTOR_SET;
+}
+
+static int write_descriptor_sets(struct render_pass *rp) {
+  size_t i;
+  VkDescriptorBufferInfo buffer_info = { 0 };
+  VkWriteDescriptorSet write_info = { 0 };
+
+  for (i = 0; i < rp->device->n_swapchain_images; ++i) {
+    buffer_info.buffer = rp->uniforms[i].buffer;
+    buffer_info.offset = 0;
+    buffer_info.range = sizeof(struct uniforms);
+    write_info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write_info.dstSet = rp->desc_sets[i];
+    write_info.dstBinding = 0;
+    write_info.dstArrayElement = 0;
+    write_info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    write_info.descriptorCount = 1;
+    write_info.pBufferInfo = &buffer_info;
+    rp->device->vkUpdateDescriptorSets(
+      rp->device->device,
+      1,
+      &write_info,
+      0,
+      NULL
+    );
+  }
+  return RENDER_ERROR_NONE;
+}
+
 static int create_command_pool(struct render_pass *rp) {
   VkCommandPoolCreateInfo create_info = { 0 };
   VkResult result;
@@ -409,13 +474,21 @@ static int create_command_pool(struct render_pass *rp) {
 static int create_descriptor_pool(struct render_pass *rp) {
   VkDescriptorPoolSize size = { 0 };
   VkDescriptorPoolCreateInfo create_info = { 0 };
+  VkResult result;
 
   size.descriptorCount = rp->device->n_swapchain_images;
   size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
   create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-  create_info.maxSets = 1;
+  create_info.maxSets = rp->device->n_swapchain_images;
   create_info.poolSizeCount = 1;
   create_info.pPoolSizes = &size;
+  result = rp->device->vkCreateDescriptorPool(
+    rp->device->device,
+    &create_info,
+    NULL,
+    &rp->desc_pool
+  );
+  if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_DESCRIPTOR_POOL;
 
   return RENDER_ERROR_NONE;
 }
@@ -591,6 +664,9 @@ static int teardown_pass(struct render_pass *rp) {
     );
   }
   free(rp->desc_layouts);
+
+  rp->device->vkDestroyDescriptorPool(rp->device->device, rp->desc_pool, NULL);
+
   for (i = 0; i < rp->device->n_swapchain_images; ++i) {
     rp->device->vkDestroyImageView(
       rp->device->device,
@@ -609,13 +685,15 @@ static int teardown_pass(struct render_pass *rp) {
     (uint32_t) rp->device->n_swapchain_images,
     rp->command_buffers
   );
+
   free(rp->command_buffers);
   rp->device->vkDestroyRenderPass(rp->device->device, rp->render_pass, NULL);
   rp->device->vkDestroyPipeline(rp->device->device, rp->pipeline, NULL);
+
   return RENDER_ERROR_NONE;
 }
 
-static int create_descriptors(
+static int create_descriptor_layouts(
   struct render_pass *rp,
   size_t n_descriptors,
   VkDescriptorSetLayout *out_descriptors
@@ -682,13 +760,15 @@ static int create_uniform_buffers(struct render_pass *rp) {
 
 static int create_pass(struct render_pass *rp) {
   int err = RENDER_ERROR_VULKAN_SWAPCHAIN_RECREATE;
+  size_t i;
 
-  /* XXX: Don't hard code number of descriptor layouts */
+  chkerrg(err = create_descriptor_pool(rp), err_descriptor_pool);
+  /* TODO: Don't hard code number of descriptor layouts */
   rp->desc_layouts = malloc(sizeof(VkDescriptorSetLayout));
   if (!rp->desc_layouts) goto err_desc_layouts_memory;
   rp->n_desc_layouts = 1;
   chkerrg(
-    err = create_descriptors(rp, 1, rp->desc_layouts),
+    err = create_descriptor_layouts(rp, 1, rp->desc_layouts),
     err_descriptors
   );
 
@@ -696,6 +776,15 @@ static int create_pass(struct render_pass *rp) {
     err = create_uniform_buffers(rp),
     err_uniform_buffers
   );
+  for (i = 0; i < rp->device->n_swapchain_images; ++i) {
+    struct uniforms data = { 0 };
+
+    render_buffer_write(
+      &rp->uniforms[i],
+      sizeof(struct uniforms),
+      (void *) &data
+    );
+  }
 
   chkerrg(
     err = create_pipeline(
@@ -728,6 +817,15 @@ static int create_pass(struct render_pass *rp) {
     err_framebuffers
   );
 
+  chkerrg(
+    err = create_descriptor_sets(rp),
+    err_descriptor_sets
+  );
+  chkerrg(
+    err = write_descriptor_sets(rp),
+    err_write_descriptor_sets
+  );
+
   chkerrg(err = create_command_buffers(rp), err_command_buffers);
   chkerrg(err = write_buffers(rp), err_write_buffers);
 
@@ -742,6 +840,8 @@ static int create_pass(struct render_pass *rp) {
     rp->command_buffers
   );
  err_command_buffers:
+ err_write_descriptor_sets:
+ err_descriptor_sets:
   {
     size_t i = rp->device->n_swapchain_images;
 
@@ -786,6 +886,8 @@ static int create_pass(struct render_pass *rp) {
  err_descriptors:
   free(rp->desc_layouts);
  err_desc_layouts_memory:
+  rp->device->vkDestroyDescriptorPool(rp->device->device, rp->desc_pool, NULL);
+ err_descriptor_pool:
   return err;
 }
 
@@ -830,8 +932,6 @@ int render_pass_init(
 
   chkerrg(err = create_command_pool(rp), err_command_pool);
 
-  chkerrg(err = create_descriptor_pool(rp), err_descriptor_pool);
-
   chkerrg(err = create_vertex_data(rp), err_vertex_data);
 
   rp->framebuffers = malloc(
@@ -856,8 +956,6 @@ int render_pass_init(
   render_buffer_destroy(&rp->vertices);
   render_buffer_destroy(&rp->indices);
  err_vertex_data:
-  /* Destroy command pool */
- err_descriptor_pool:
   rp->device->vkDestroyRenderPass(rp->device->device, rp->render_pass, NULL);
   rp->device->vkDestroyPipeline(rp->device->device, rp->pipeline, NULL);
   rp->device->vkDestroyCommandPool(rp->device->device, rp->command_pool, NULL);
@@ -871,7 +969,7 @@ void render_pass_deinit(struct render_pass *rp) {
   teardown_pass(rp);
   render_memory_deinit(&rp->uniform_memory);
   free(rp->uniforms);
-  /* XXX: remove vertices and indices */
+  /* TODO: remove vertices and indices */
   render_buffer_destroy(&rp->vertices);
   render_buffer_destroy(&rp->indices);
   rp->device->vkDestroyCommandPool(rp->device->device, rp->command_pool, NULL);

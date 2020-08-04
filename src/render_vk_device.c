@@ -143,8 +143,14 @@ static int load_device_functions(struct render_device *rd) {
   vkfunc(vkCmdBindVertexBuffers);
   vkfunc(vkCmdBindIndexBuffer);
   vkfunc(vkCmdDrawIndexed);
+  /* Descriptors */
+  vkfunc(vkCreateDescriptorPool);
+  vkfunc(vkDestroyDescriptorPool);
   vkfunc(vkCreateDescriptorSetLayout);
   vkfunc(vkDestroyDescriptorSetLayout);
+  vkfunc(vkAllocateDescriptorSets);
+  vkfunc(vkFreeDescriptorSets);
+  vkfunc(vkUpdateDescriptorSets);
   /* Memory */
   vkfunc(vkCreateBuffer);
   vkfunc(vkDestroyBuffer);

@@ -11,14 +11,7 @@ layout (binding = 0) uniform Uniforms {
 
 vec4 mega_color = vec4(1, 0, 1, 1);
 
-// layout (binding = 0) uniform Uniforms {
-//   mat4 model;
-//   mat4 view;
-//   mat4 projection;
-// } u;
-
 void main(void) {
-  // mat4 mvp = u.projection * u.view * u.model;
   gl_Position = vec4(position, 1.0);
   out_color = vec4(color, 1);
   // out_color = u.color;

@@ -130,9 +130,14 @@ struct render_device {
   vkfunc(vkCmdBindVertexBuffers);
   vkfunc(vkCmdBindIndexBuffer);
   vkfunc(vkCmdDrawIndexed);
-  vkfunc(vkCreateDescriptorPool); /* ?? */
+  /* Descriptors */
+  vkfunc(vkCreateDescriptorPool);
+  vkfunc(vkDestroyDescriptorPool);
   vkfunc(vkCreateDescriptorSetLayout);
   vkfunc(vkDestroyDescriptorSetLayout);
+  vkfunc(vkAllocateDescriptorSets);
+  vkfunc(vkFreeDescriptorSets);
+  vkfunc(vkUpdateDescriptorSets);
   /* Memory */
   vkfunc(vkCreateBuffer);
   vkfunc(vkDestroyBuffer);
@@ -154,7 +159,9 @@ struct render_device {
 struct render_pass {
   struct render_device *device;
   size_t n_desc_layouts;
+  VkDescriptorPool desc_pool;
   VkDescriptorSetLayout *desc_layouts;
+  VkDescriptorSet *desc_sets;
   VkRenderPass render_pass;
   VkPipeline pipeline;
   VkImageView *image_views;

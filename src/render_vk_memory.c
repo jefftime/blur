@@ -131,6 +131,7 @@ int render_memory_create_buffer(
   VkResult result;
 
   if (!out_buffer) return RENDER_ERROR_NULL;
+  /* TODO: Check free memory before trying to create a buffer */
   create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
   create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   create_info.size = size;
