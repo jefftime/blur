@@ -20,12 +20,14 @@
 #include "error.h"
 #include "shaders/default_vert.h"
 #include "shaders/default_frag.h"
-#include "vector.h"
+#include "trig.h"
 #include <stdlib.h>
 #include <string.h>
 
 struct uniforms {
   struct vec3 color;
+  char pad0;
+  struct mat4 m;
 };
 
 /* TODO: Globals for now, will be passed in later */
@@ -795,8 +797,11 @@ static int create_pass(struct render_pass *rp) {
   for (i = 0; i < rp->device->n_swapchain_images; ++i) {
     struct uniforms data = { 0 };
 
-    data.color.x = 1.0;
-    data.color.y = 1.0;
+    /* data.color.x = 1.0; */
+    /* data.color.y = 1.0; */
+    data.m.data[0] = 1.0;
+    data.m.data[1] = 1.0;
+    data.m.data[2] = 1.0;
     render_buffer_write(
       &rp->uniforms[i],
       sizeof(struct uniforms),
