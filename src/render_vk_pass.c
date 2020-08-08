@@ -457,17 +457,20 @@ static int write_descriptor_sets(struct render_pass *rp) {
   return RENDER_ERROR_NONE;
 }
 
-static int create_command_pool(struct render_pass *rp) {
+static int create_command_pool(
+  struct render_device *rd,
+  VkCommandPool *out_pool
+) {
   VkCommandPoolCreateInfo create_info = { 0 };
   VkResult result;
 
   create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-  create_info.queueFamilyIndex = (uint32_t) rp->device->graphics_index;
-  result = rp->device->vkCreateCommandPool(
-    rp->device->device,
+  create_info.queueFamilyIndex = (uint32_t) rd->graphics_index;
+  result = rd->vkCreateCommandPool(
+    rd->device,
     &create_info,
     NULL,
-    &rp->command_pool
+    out_pool
   );
   if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_COMMAND_POOL;
   return RENDER_ERROR_NONE;
@@ -522,7 +525,11 @@ static int create_command_buffers(struct render_pass *rp) {
   return err;
 }
 
-static int create_vertex_data(struct render_pass *rp) {
+static int create_vertex_data(
+  struct render_device *rd,
+  struct render_buffer *out_vertices,
+  struct render_buffer *out_indices
+) {
   int err = RENDER_ERROR_VULKAN_VERTEX_DATA;
   size_t size_verts = sizeof(float) * 6 * 4;
   size_t size_indices = sizeof(uint16_t) * 3 * 2;
@@ -533,59 +540,43 @@ static int create_vertex_data(struct render_pass *rp) {
      0.5f, -0.5f, 0.0f, 0.0, 1.0f, 0.0f
   };
   uint16_t indices[] = { 0, 1, 2, 2, 3, 0 };
-  struct render_buffer test_buffer;
 
   chkerrg(
     err = render_memory_create_buffer(
-      &rp->device->memory,
+      &rd->memory,
       16,
       VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
       size_verts,
-      &rp->vertices
+      out_vertices
     ),
     err_vertices
   );
   chkerrg(
     err = render_memory_create_buffer(
-      &rp->device->memory,
+      &rd->memory,
       16,
       VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
       size_indices,
-      &rp->indices
+      out_indices
     ),
     err_indices
   );
   chkerrg(
-    err = render_buffer_write(&rp->vertices, size_verts, vertices),
+    err = render_buffer_write(out_vertices, size_verts, vertices),
     err_write_vertices
   );
   chkerrg(
-    err = render_buffer_write(&rp->indices, size_indices, indices),
+    err = render_buffer_write(out_indices, size_indices, indices),
     err_write_indices
   );
-
-  /* TEST */
-  {
-    chkerrg(
-      err = render_memory_create_buffer(
-        &rp->uniform_memory,
-        16,
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-        12,
-        &test_buffer
-      ),
-      err_indices
-    );
-    render_buffer_destroy(&test_buffer);
-  }
   return RENDER_ERROR_NONE;
 
 
  err_write_indices:
  err_write_vertices:
-  render_buffer_destroy(&rp->indices);
+  render_buffer_destroy(out_indices);
  err_indices:
-  render_buffer_destroy(&rp->vertices);
+  render_buffer_destroy(out_vertices);
  err_vertices:
   return err;
 }
@@ -933,58 +924,60 @@ int render_pass_init(
   struct render_device *rd
 ) {
   int err = RENDER_ERROR_VULKAN_DEVICE;
+  struct render_memory uniform_memory;
+  struct render_buffer *uniforms, vertices, indices;
+  VkCommandPool command_pool;
+  VkFramebuffer *framebuffers;
+  VkImageView *image_views;
 
   if (!rp) return RENDER_ERROR_NULL;
   if (!rd) return RENDER_ERROR_NULL;
 
   memset(rp, 0, sizeof(struct render_pass));
   rp->device = rd;
-
   chkerrg(
     err = render_memory_init(
-      &rp->uniform_memory,
+      &uniform_memory,
       rd,
       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
       MB_TO_BYTES(1)
     ),
-    err_uniform_memory
+    err_uniform_render_memory
   );
+  uniforms = malloc(sizeof(struct render_buffer) * rd->n_swapchain_images);
+  if (!uniforms) goto err_uniform_memory;
+  chkerrg(err = create_command_pool(rd, &command_pool), err_command_pool);
+  chkerrg(err = create_vertex_data(rd, &vertices, &indices), err_vertex_data);
+  framebuffers = malloc(sizeof(VkFramebuffer) * rd->n_swapchain_images);
+  if (!framebuffers) goto err_framebuffer_memory;
+  image_views = malloc(sizeof(VkImageView) * rd->n_swapchain_images);
+  if (!image_views) goto err_image_view_memory;
 
-  rp->uniforms =
-    malloc(sizeof(struct render_buffer) * rd->n_swapchain_images);
-
-  chkerrg(err = create_command_pool(rp), err_command_pool);
-
-  chkerrg(err = create_vertex_data(rp), err_vertex_data);
-
-  rp->framebuffers = malloc(
-    sizeof(VkFramebuffer) * rp->device->n_swapchain_images
-  );
-  if (!rp->framebuffers) goto err_framebuffer_memory;
-
-  rp->image_views = malloc(
-    sizeof(VkImageView) * rp->device->n_swapchain_images
-  );
-  if (!rp->image_views) goto err_image_view_memory;
-
+  rp->uniform_memory = uniform_memory;
+  rp->uniforms = uniforms;
+  rp->command_pool = command_pool;
+  rp->vertices = vertices;
+  rp->indices = indices;
+  rp->framebuffers = framebuffers;
+  rp->image_views = image_views;
   chkerrg(err = create_pass(rp), err_pass);
 
   return RENDER_ERROR_NONE;
 
  err_pass:
-  free(rp->image_views);
+  free(image_views);
  err_image_view_memory:
-  free(rp->framebuffers);
+  free(framebuffers);
  err_framebuffer_memory:
   render_buffer_destroy(&rp->vertices);
   render_buffer_destroy(&rp->indices);
  err_vertex_data:
-  rp->device->vkDestroyRenderPass(rp->device->device, rp->render_pass, NULL);
-  rp->device->vkDestroyPipeline(rp->device->device, rp->pipeline, NULL);
-  rp->device->vkDestroyCommandPool(rp->device->device, rp->command_pool, NULL);
+  rd->vkDestroyCommandPool(rd->device, command_pool, NULL);
  err_command_pool:
-  render_memory_deinit(&rp->uniform_memory);
+  free(uniforms);
  err_uniform_memory:
+  render_memory_deinit(&uniform_memory);
+ err_uniform_render_memory:
   return err;
 }
 

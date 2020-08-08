@@ -27,33 +27,28 @@
 #define LIBNAME "libvulkan.so"
 #endif
 
-static int load_vulkan(struct render_instance *r) {
-  /*
-   * WARNING: This won't work on systems where object pointers and function
-   * pointers have different size and/or alignments
-   */
+static int load_vulkan(void **vk_handle) {
+  /* WARNING: This won't work on systems where object pointers and function
+   * pointers have different size and/or alignments */
   union {
-    PFN_vkGetInstanceProcAddr func;
     void *ptr;
+    PFN_vkGetInstanceProcAddr func;
   } dlsym_result;
 
 #ifdef PLATFORM_LINUX
-  r->vk_handle = dlopen(LIBNAME, RTLD_NOW);
-  if (!r->vk_handle) return RENDER_ERROR_VULKAN_LOAD;
+  *vk_handle = dlopen(LIBNAME, RTLD_NOW);
+  if (!*vk_handle) return RENDER_ERROR_VULKAN_LOAD;
 
-  /*
-   * Object pointers and function pointers are treated differently in
-   * ISO C, so we have to type pun the result of dlsym()
-   */
-  dlsym_result.ptr = dlsym(r->vk_handle, "vkGetInstanceProcAddr");
+  /* Object pointers and function pointers are treated differently in
+   * ISO C, so we have to type pun the result of dlsym() */
+  dlsym_result.ptr = dlsym(*vk_handle, "vkGetInstanceProcAddr");
 #endif
 
   vkGetInstanceProcAddr = dlsym_result.func;
   return RENDER_ERROR_NONE;
-  return RENDER_ERROR_NONE;
 }
 
-static int load_preinstance_functions(struct render_instance *r) {
+static int load_preinstance_functions() {
 #define vkfunc(F) \
   if (!(F = (PFN_##F) vkGetInstanceProcAddr(NULL, #F))) \
     return RENDER_ERROR_VULKAN_LOAD_INSTANCE_FUNCTION
@@ -65,16 +60,22 @@ static int load_preinstance_functions(struct render_instance *r) {
 #undef vkfunc
 }
 
-static int create_instance(struct render_instance *r, size_t n_exts, char **exts) {
+static int create_instance(
+  char *app_name,
+  char *engine_name,
+  size_t n_exts,
+  char **exts,
+  VkInstance *out_instance
+) {
   char *layers[] = { "VK_LAYER_LUNARG_standard_validation" };
   VkApplicationInfo app_info = { 0 };
   VkInstanceCreateInfo create_info = { 0 };
   VkResult result;
 
   app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-  app_info.pApplicationName = "Tortuga Test";
+  app_info.pApplicationName = app_name;
   app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-  app_info.pEngineName = "Tortuga";
+  app_info.pEngineName = engine_name;
   app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
   app_info.apiVersion = VK_API_VERSION_1_0;
   create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -88,14 +89,14 @@ static int create_instance(struct render_instance *r, size_t n_exts, char **exts
   create_info.enabledLayerCount = 1;
   create_info.ppEnabledLayerNames = (const char *const *) layers;
 #endif
-  result = vkCreateInstance(&create_info, NULL, &r->instance);
+  result = vkCreateInstance(&create_info, NULL, out_instance);
   if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_CREATE_INSTANCE;
   return RENDER_ERROR_NONE;
 }
 
-static int load_instance_functions(struct render_instance *r) {
+static int load_instance_functions(VkInstance instance) {
 #define vkfunc(F) \
-  if (!(F = (PFN_##F) vkGetInstanceProcAddr(r->instance, #F))) \
+  if (!(F = (PFN_##F) vkGetInstanceProcAddr(instance, #F))) \
     return RENDER_ERROR_VULKAN_INSTANCE_FUNCTIONS
 
   vkfunc(vkDestroyInstance);
@@ -122,30 +123,40 @@ static int load_instance_functions(struct render_instance *r) {
 #undef vkfunc
 }
 
-static int create_surface(struct render_instance *r) {
+static int create_surface(
+  VkInstance instance,
+  struct window *window,
+  VkSurfaceKHR *out_surface
+) {
   VkXcbSurfaceCreateInfoKHR create_info = { 0 };
   VkResult result;
 
   create_info.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
-  create_info.connection = r->window->os.cn;
-  create_info.window = r->window->os.wn;
-  result = vkCreateXcbSurfaceKHR(r->instance, &create_info, NULL, &r->surface);
+  create_info.connection = window->os.cn;
+  create_info.window = window->os.wn;
+  result = vkCreateXcbSurfaceKHR(instance, &create_info, NULL, out_surface);
   if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_SURFACE;
   return RENDER_ERROR_NONE;
 }
 
-static int get_devices(struct render_instance *r) {
-  uint32_t n_devices;
+static int get_devices(
+  VkInstance instance,
+  uint32_t *out_n_pdevices,
+  VkPhysicalDevice **out_pdevices
+) {
+  uint32_t n_pdevices;
   VkResult result;
+  VkPhysicalDevice *pdevices;
 
-  result = vkEnumeratePhysicalDevices(r->instance, &n_devices, NULL);
+  result = vkEnumeratePhysicalDevices(instance, &n_pdevices, NULL);
+  if (result != VK_SUCCESS || n_pdevices == 0)
+    return RENDER_ERROR_VULKAN_PHYSICAL_DEVICES;
+  pdevices = malloc(sizeof(VkPhysicalDevice) * n_pdevices);
+  if (!pdevices) return RENDER_ERROR_MEMORY;
+  result = vkEnumeratePhysicalDevices(instance, &n_pdevices, pdevices);
   if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_PHYSICAL_DEVICES;
-  if (n_devices == 0) return RENDER_ERROR_VULKAN_PHYSICAL_DEVICES;
-  r->pdevices = malloc(sizeof(VkPhysicalDevice) * n_devices);
-  if (!r->pdevices) return RENDER_ERROR_MEMORY;
-  result = vkEnumeratePhysicalDevices(r->instance, &n_devices, r->pdevices);
-  if (result != VK_SUCCESS) return RENDER_ERROR_VULKAN_PHYSICAL_DEVICES;
-  r->n_pdevices = n_devices;
+  *out_n_pdevices = n_pdevices;
+  *out_pdevices = pdevices;
   return RENDER_ERROR_NONE;
 }
 
@@ -153,38 +164,50 @@ static int get_devices(struct render_instance *r) {
 /* Public */
 /* **************************************** */
 
-int render_instance_init(struct render_instance *r, struct window *w) {
-  int err;
-  size_t n_exts;
+int render_instance_init(struct render_instance *r, struct window *window) {
   char *exts[] = {
     VK_KHR_SURFACE_EXTENSION_NAME,
     VK_KHR_XCB_SURFACE_EXTENSION_NAME
   };
+  int err;
+  uint32_t n_pdevices;
+  size_t n_exts;
+  void *vk_handle;
+  VkInstance instance;
+  VkSurfaceKHR surface;
+  VkPhysicalDevice *pdevices;
 
   if (!r) return RENDER_ERROR_NULL;
   memset(r, 0, sizeof(struct render_instance));
   n_exts = sizeof(exts) / sizeof(exts[0]);
-  r->window = w;
-  chkerrg(err = load_vulkan(r), err_load_vulkan);
-  chkerrg(err = load_preinstance_functions(r), err_preinstance_functions);
-  chkerrg(err = create_instance(r, n_exts, exts), err_instance);
-  chkerrg(err = load_instance_functions(r), err_instance_functions);
-  chkerrg(err = create_surface(r), err_surface);
-  chkerrg(err = get_devices(r), err_devices);
+  chkerrg(err = load_vulkan(&vk_handle), err_load_vulkan);
+  chkerrg(err = load_preinstance_functions(), err_preinstance_functions);
+  chkerrg(
+    err = create_instance("Tortuga", "Tortuga", n_exts, exts, &instance),
+    err_instance
+  );
+  chkerrg(err = load_instance_functions(instance), err_instance_functions);
+  chkerrg(err = create_surface(instance, window, &surface), err_surface);
+  chkerrg(err = get_devices(instance, &n_pdevices, &pdevices), err_devices);
+  r->vk_handle = vk_handle;
+  r->instance = instance;
+  r->surface = surface;
+  r->n_pdevices = n_pdevices;
+  r->pdevices = pdevices;
+  r->window = window;
   return RENDER_ERROR_NONE;
 
  err_devices:
-  vkDestroySurfaceKHR(r->instance, r->surface, NULL);
+  vkDestroySurfaceKHR(instance, surface, NULL);
  err_surface:
  err_instance_functions:
-  vkDestroyInstance(r->instance, NULL);
+  vkDestroyInstance(instance, NULL);
  err_instance:
  err_preinstance_functions:
 #ifdef PLATFORM_LINUX
-  dlclose(r->vk_handle);
+  dlclose(vk_handle);
 #endif
  err_load_vulkan:
-  memset(r, 0, sizeof(struct render_instance));
   return err;
 }
 
