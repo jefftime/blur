@@ -17,9 +17,13 @@ SRC=src/tortuga.c \
 	src/window_linux.c \
 	src/keypoll_linux.c \
 	src/trig.c
-SHADERS=src/shaders/default
 EXTLIBS=-ldl
 STATICLIBS=libs/libxcb.a libs/libXdmcp.a libs/libXau.a
+
+# These aren't actual files, but convention driven since shaders are split
+# across two or more files. We just define the overall name for the shader
+# group and compute the filenames below in SHADER_HEADERS
+SHADERS=src/shaders/default
 
 ########################################
 # Calculated
