@@ -54,10 +54,6 @@ vkfunc(vkGetPhysicalDeviceMemoryProperties);
 vkfunc(vkGetPhysicalDeviceProperties);
 vkfunc(vkGetPhysicalDeviceFeatures);
 
-enum {
-  RENDER_ZONE_SIZE = MB_TO_BYTES(256)
-};
-
 struct render_instance {
   struct window *window;
   void *vk_handle;
