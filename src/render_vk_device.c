@@ -423,8 +423,7 @@ int render_device_init(
    * initialized */
   usage_flags =
     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
-    | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
-    | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
   chkerrg(
     err = render_memory_init(
       &memory,
