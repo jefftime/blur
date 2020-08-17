@@ -40,7 +40,6 @@ VkVertexInputAttributeDescription attrs[] = {
   { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 3 }
 };
 
-/* TODO: Refactor to pass in descriptor set layouts */
 static int create_pipeline_layout(
   struct render_device *device,
   uint32_t n_desc_layouts,
@@ -805,15 +804,15 @@ static int create_descriptor_layouts(
 }
 
 static int create_uniform_buffers(
-  struct render_device *device,
   struct render_memory *memory,
   struct render_buffer **out_uniforms
 ) {
   size_t i;
 
   *out_uniforms =
-    malloc(sizeof(struct render_buffer) * device->n_swapchain_images);
-  for (i = 0; i < device->n_swapchain_images; ++i) {
+    malloc(sizeof(struct render_buffer) * memory->device->n_swapchain_images);
+  if (!*out_uniforms) return RENDER_ERROR_MEMORY;
+  for (i = 0; i < memory->device->n_swapchain_images; ++i) {
     int err;
 
     err = render_memory_create_buffer(
@@ -822,7 +821,6 @@ static int create_uniform_buffers(
       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
       sizeof(struct uniforms),
       *out_uniforms + i
-      /* &(*out_uniforms)[i] */
     );
     if (err) goto err_loop;
 
@@ -834,16 +832,6 @@ static int create_uniform_buffers(
     return RENDER_ERROR_VULKAN_BUFFER;
   }
 
-  return RENDER_ERROR_NONE;
-}
-
-static int setup_descriptors(
-  struct render_memory *out_uniform_memory,
-  struct render_buffer *out_uniforms,
-  VkDescriptorSetLayout **out_desc_layouts,
-  VkDescriptorPool *out_desc_pool,
-  VkDescriptorSet **out_desc_sets
-) {
   return RENDER_ERROR_NONE;
 }
 
@@ -877,7 +865,7 @@ static int create_pass(
   chkerrg(
     err = create_descriptor_layouts(
       device,
-      n_desc_layouts,
+      (uint32_t) n_desc_layouts,
       desc_layout_info,
       out_desc_layouts
     ),
@@ -890,7 +878,7 @@ static int create_pass(
   );
 
   chkerrg(
-    err = create_uniform_buffers(device, uniform_memory, out_uniforms),
+    err = create_uniform_buffers(uniform_memory, out_uniforms),
     err_uniforms
   );
 
@@ -1111,57 +1099,36 @@ int render_pass_init(
 ) {
   int err = RENDER_ERROR_VULKAN_DEVICE;
   size_t n_bindings, n_attrs;
-  struct render_memory uniform_memory;
-  struct render_buffer *uniforms, vertices, indices;
-  VkCommandPool command_pool;
-  VkCommandBuffer *command_buffers;
-  VkFramebuffer *framebuffers;
-  VkImageView *image_views;
   VkDescriptorSetLayoutBinding desc_layout_bindings[] = { 0 };
   VkDescriptorSetLayoutCreateInfo desc_layout_info = { 0 };
-  VkDescriptorSetLayout *desc_layouts;
-  VkDescriptorPool desc_pool;
-  VkDescriptorSet *desc_sets;
-  VkRenderPass render_pass;
-  VkPipelineLayout pipeline_layout;
-  VkPipeline pipeline;
 
   if (!rp) return RENDER_ERROR_NULL;
   if (!device) return RENDER_ERROR_NULL;
 
   memset(rp, 0, sizeof(struct render_pass));
+
   chkerrg(
     err = render_memory_init(
-      &uniform_memory,
+      &rp->uniform_memory,
       device,
       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
       MB_TO_BYTES(1)
     ),
     err_uniform_render_memory
   );
+
   chkerrg(
-    err = create_command_pool(device, &command_pool),
+    err = create_command_pool(device, &rp->command_pool),
     err_command_pool
   );
   chkerrg(
-    err = create_vertex_data(device, &vertices, &indices),
+    err = create_vertex_data(device, &rp->vertices, &rp->indices),
     err_vertex_data
   );
-  framebuffers = malloc(sizeof(VkFramebuffer) * device->n_swapchain_images);
-  if (!framebuffers) goto err_framebuffer_memory;
-  image_views = malloc(sizeof(VkImageView) * device->n_swapchain_images);
-  if (!image_views) goto err_image_view_memory;
-
-  /* chkerrg( */
-  /*   err = setup_descriptors( */
-  /*     &uniform_memory, */
-  /*     &uniforms, */
-  /*     &desc_layouts, */
-  /*     &desc_pool, */
-  /*     &desc_sets, */
-  /*   ), */
-  /*   err_descriptors */
-  /* ) */
+  rp->framebuffers = malloc(sizeof(VkFramebuffer) * device->n_swapchain_images);
+  if (!rp->framebuffers) goto err_framebuffer_memory;
+  rp->image_views = malloc(sizeof(VkImageView) * device->n_swapchain_images);
+  if (!rp->image_views) goto err_image_view_memory;
 
   n_bindings = sizeof(bindings) / sizeof(bindings[0]);
   n_attrs = sizeof(attrs) / sizeof(attrs[0]);
@@ -1184,53 +1151,39 @@ int render_pass_init(
       bindings,
       n_attrs,
       attrs,
-      &uniform_memory,
-      &desc_layouts,
-      &desc_pool,
-      &uniforms,
-      &render_pass,
-      &pipeline_layout,
-      &pipeline,
-      &image_views,
-      &framebuffers,
-      &desc_sets,
-      &command_buffers,
-      &command_pool,
-      &vertices,
-      &indices
+      &rp->uniform_memory,
+      &rp->desc_layouts,
+      &rp->desc_pool,
+      &rp->uniforms,
+      &rp->render_pass,
+      &rp->pipeline_layout,
+      &rp->pipeline,
+      &rp->image_views,
+      &rp->framebuffers,
+      &rp->desc_sets,
+      &rp->command_buffers,
+      &rp->command_pool,
+      &rp->vertices,
+      &rp->indices
     ),
     err_pass
   );
+
   rp->device = device;
-  rp->uniform_memory = uniform_memory;
-  rp->desc_layouts = desc_layouts;
-  rp->desc_pool = desc_pool;
-  rp->uniforms = uniforms;
-  rp->render_pass = render_pass;
-  rp->pipeline_layout = pipeline_layout;
-  rp->pipeline = pipeline;
-  rp->image_views = image_views;
-  rp->framebuffers = framebuffers;
-  rp->desc_sets = desc_sets;
-  rp->command_buffers = command_buffers;
-  rp->command_pool = command_pool;
-  rp->vertices = vertices;
-  rp->indices = indices;
+  rp->n_desc_layouts = 1;
   return RENDER_ERROR_NONE;
 
  err_pass:
-  free(image_views);
+  free(rp->image_views);
  err_image_view_memory:
-  free(framebuffers);
+  free(rp->framebuffers);
  err_framebuffer_memory:
-  render_buffer_destroy(&vertices);
-  render_buffer_destroy(&indices);
+  render_buffer_destroy(&rp->vertices);
+  render_buffer_destroy(&rp->indices);
  err_vertex_data:
-  device->vkDestroyCommandPool(device->device, command_pool, NULL);
+  device->vkDestroyCommandPool(device->device, rp->command_pool, NULL);
  err_command_pool:
-  free(uniforms);
- err_uniform_memory:
-  render_memory_deinit(&uniform_memory);
+  render_memory_deinit(&rp->uniform_memory);
  err_uniform_render_memory:
   return err;
 }

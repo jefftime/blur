@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
     kp_update(&kp);
     window_update(&window);
 
-    if (kp_getkey_press(kp, KP_KEY_ESC)) window.should_close = 1;
+    if (kp_getkey_press(kp, KP_KEY_ESC)) break;
     render_pass_update(&pipeline);
   }
   render_pass_deinit(&pipeline);
