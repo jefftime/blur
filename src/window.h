@@ -32,12 +32,8 @@
 #include <xcb/xcb.h>
 #include <xcb/shm.h>
 struct window_os_details {
-  int _initialized;
   xcb_connection_t *cn;
-  xcb_gcontext_t gc;
   xcb_window_t wn;
-  xcb_screen_t *screen;
-  xcb_setup_t *setup;
   xcb_atom_t win_delete;
 };
 

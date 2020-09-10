@@ -47,10 +47,8 @@ static int create_pipeline_layout(
   VkPipelineLayout *out_layout
 ) {
   VkPipelineLayoutCreateInfo create_info = { 0 };
-  VkDescriptorSetLayoutCreateInfo layout_create_info = { 0 };
   VkResult result;
 
-  layout_create_info.bindingCount = 1;
   create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
   create_info.setLayoutCount = (uint32_t) n_desc_layouts;
   create_info.pSetLayouts = desc_layouts;
@@ -170,7 +168,7 @@ static int create_pipeline(
   chkerrg(
     err = create_pipeline_layout(
       device,
-      n_desc_layouts,
+      (uint32_t) n_desc_layouts,
       desc_layouts,
       &layout
     ),

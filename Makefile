@@ -5,7 +5,7 @@
 # Overrideable
 ########################################
 
-CC=clang
+CC=gcc
 CFLAGS=-g -std=c90 -pedantic-errors -Wall -Wconversion
 LDFLAGS=-rdynamic
 PLATFORM=LINUX

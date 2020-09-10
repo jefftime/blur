@@ -239,7 +239,8 @@ static void update_states(struct kp_ctx *kp) {
 
   /* advance the state from KP_STATE_PRESSED to KP_STATE_HELD */
   for (i = 0; i < KP_MAX_KEYS; ++i) {
-    kp->keymap[i] += (kp->keymap[i] == 1);
+    kp->keymap[i] =
+      (unsigned char) (kp->keymap[i] + (kp->keymap[i] == 1));
   }
 }
 

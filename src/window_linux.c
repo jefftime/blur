@@ -23,111 +23,127 @@
 #include <string.h>
 #include <xcb/xcb.h>
 
-static int setup_connection(struct window *w) {
+static int setup_connection(
+  xcb_connection_t **out_cn,
+  xcb_screen_t **out_screen
+) {
   int i, screen_index;
+  xcb_setup_t *setup;
   xcb_screen_iterator_t screen_iter;
 
-  w->os.cn = xcb_connect(NULL, &screen_index);
-  if (!w->os.cn) return WINDOW_ERROR_CONNECTION;
-  w->os.setup = (xcb_setup_t *) xcb_get_setup(w->os.cn);
-  screen_iter = xcb_setup_roots_iterator(w->os.setup);
+  *out_cn = xcb_connect(NULL, &screen_index);
+  if (!*out_cn) return WINDOW_ERROR_CONNECTION;
+  setup = (xcb_setup_t *) xcb_get_setup(*out_cn);
+  screen_iter = xcb_setup_roots_iterator(setup);
   /* get selected screen index information */
   for (i = 0; i < screen_index; ++i) {
     xcb_screen_next(&screen_iter);
   }
-  w->os.screen = screen_iter.data;
-  return 0;
+  *out_screen = screen_iter.data;
+  return WINDOW_ERROR_NONE;
 }
 
-static int setup_window(struct window *w) {
-  char *wm_protocols = "WM_PROTOCOLS";
-  char *wm_delete_window = "WM_DELETE_WINDOW";
+static int setup_window(
+  xcb_connection_t *cn,
+  char *title,
+  uint16_t width,
+  uint16_t height,
+  xcb_screen_t *screen,
+  xcb_window_t *out_wn
+) {
   uint32_t mask = XCB_CW_EVENT_MASK;
   uint32_t values[] = { XCB_EVENT_MASK_STRUCTURE_NOTIFY };
-  xcb_intern_atom_cookie_t protocol_ck, delete_ck;
-  xcb_intern_atom_reply_t *protocol, *delete;
 
-  w->os.wn = xcb_generate_id(w->os.cn);
+  *out_wn = xcb_generate_id(cn);
   xcb_create_window(
-    w->os.cn,
+    cn,
     XCB_COPY_FROM_PARENT,
-    w->os.wn,
-    w->os.screen->root,
+    *out_wn,
+    screen->root,
     0, 0,
-    w->width, w->height,
+    width, height,
     0,
     XCB_WINDOW_CLASS_INPUT_OUTPUT,
-    w->os.screen->root_visual,
+    screen->root_visual,
     mask,
     values
   );
   /* window title */
   xcb_change_property(
-    w->os.cn,
+    cn,
     XCB_PROP_MODE_REPLACE,
-    w->os.wn,
+    *out_wn,
     XCB_ATOM_WM_NAME,
     XCB_ATOM_STRING,
     8,
-    (uint32_t) strlen(w->title),
-    w->title
+    (uint32_t) strlen(title),
+    title
   );
+
+  return WINDOW_ERROR_NONE;
+}
+
+static int setup_atoms(
+  xcb_connection_t *cn,
+  xcb_window_t wn,
+  xcb_atom_t *out_win_delete
+) {
+  char *wm_protocols = "WM_PROTOCOLS";
+  char *wm_delete_window = "WM_DELETE_WINDOW";
+  xcb_intern_atom_cookie_t protocol_ck, delete_ck;
+  xcb_intern_atom_reply_t *protocol, *delete;
+
   /* watch for delete event */
   protocol_ck = xcb_intern_atom(
-    w->os.cn,
+    cn,
     0,
     (uint16_t) strlen(wm_protocols),
     wm_protocols
   );
   delete_ck = xcb_intern_atom(
-    w->os.cn,
+    cn,
     0,
     (uint16_t) strlen(wm_delete_window),
     wm_delete_window
   );
-  protocol = xcb_intern_atom_reply(w->os.cn, protocol_ck, NULL);
-  delete = xcb_intern_atom_reply(w->os.cn, delete_ck, NULL);
+  protocol = xcb_intern_atom_reply(cn, protocol_ck, NULL);
+  delete = xcb_intern_atom_reply(cn, delete_ck, NULL);
   if (!protocol) return WINDOW_ERROR_INTERN_ATOM;
   if (!delete) {
     free(protocol);
     return WINDOW_ERROR_INTERN_ATOM;
   }
   xcb_change_property(
-    w->os.cn,
+    cn,
     XCB_PROP_MODE_REPLACE,
-    w->os.wn,
+    wn,
     protocol->atom,
     XCB_ATOM_ATOM,
     32,
     1,
     &delete->atom
   );
-  w->os.win_delete = delete->atom;
+  *out_win_delete = delete->atom;
   free(protocol);
   free(delete);
-  xcb_map_window(w->os.cn, w->os.wn);
-  return 0;
+  xcb_map_window(cn, wn);
+  return WINDOW_ERROR_NONE;
 }
 
-static int setup_gc(struct window *w) {
-  uint32_t values[] = { 0 };
+static int init_xcb(
+  char *title,
+  uint16_t width,
+  uint16_t height,
+  xcb_connection_t **out_cn,
+  xcb_window_t *out_wn,
+  xcb_atom_t *out_win_delete
+) {
+  xcb_screen_t *screen;
 
-  w->os.gc = xcb_generate_id(w->os.cn);
-  xcb_create_gc(
-    w->os.cn,
-    w->os.gc,
-    w->os.wn,
-    XCB_GC_GRAPHICS_EXPOSURES,
-    values
-  );
-  return 0;
-}
-
-static int init_xcb(struct window *w) {
-  chkerr(setup_connection(w));
-  chkerr(setup_window(w));
-  chkerr(setup_gc(w));
-  xcb_flush(w->os.cn);
+  chkerr(setup_connection(out_cn, &screen));
+  chkerr(setup_window(*out_cn, title, width, height, screen, out_wn));
+  chkerr(setup_atoms(*out_cn, *out_wn, out_win_delete));
+  xcb_flush(*out_cn);
   return 0;
 }
 
@@ -147,14 +163,21 @@ int window_init(
   w->width = width;
   w->height = height;
   w->should_close = 0;
-  chkerr(init_xcb(w));
-  w->os._initialized = 1;
+  chkerr(
+    init_xcb(
+      title,
+      width,
+      height,
+      &w->os.cn,
+      &w->os.wn,
+      &w->os.win_delete
+    )
+  );
   return WINDOW_ERROR_NONE;
 }
 
 void window_deinit(struct window *w) {
   if (!w) return;
-  if (!w->os._initialized) return;
   xcb_destroy_window(w->os.cn, w->os.wn);
   xcb_flush(w->os.cn);
   xcb_disconnect(w->os.cn);
