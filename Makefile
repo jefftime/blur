@@ -11,7 +11,7 @@ LDFLAGS=-rdynamic
 PLATFORM=LINUX
 RENDER_BACKEND=VK
 OBJ_SUFFIX=.o
-SRC=src/tortuga.c \
+SRC=src/main.c \
 	src/xrand.c \
 	src/render.c \
 	src/window_linux.c \

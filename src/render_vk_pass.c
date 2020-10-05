@@ -1123,10 +1123,6 @@ int render_pass_init(
     err = create_vertex_data(device, &rp->vertices, &rp->indices),
     err_vertex_data
   );
-  rp->framebuffers = malloc(sizeof(VkFramebuffer) * device->n_swapchain_images);
-  if (!rp->framebuffers) goto err_framebuffer_memory;
-  rp->image_views = malloc(sizeof(VkImageView) * device->n_swapchain_images);
-  if (!rp->image_views) goto err_image_view_memory;
 
   n_bindings = sizeof(bindings) / sizeof(bindings[0]);
   n_attrs = sizeof(attrs) / sizeof(attrs[0]);
@@ -1172,10 +1168,6 @@ int render_pass_init(
   return RENDER_ERROR_NONE;
 
  err_pass:
-  free(rp->image_views);
- err_image_view_memory:
-  free(rp->framebuffers);
- err_framebuffer_memory:
   render_buffer_destroy(&rp->vertices);
   render_buffer_destroy(&rp->indices);
  err_vertex_data:
