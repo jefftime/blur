@@ -1,0 +1,107 @@
+digraph {
+  graph [rankdir=LR];
+
+  subgraph cluster_descriptors {
+    label = "Uniforms";
+    labeljust="l";
+    VkDescriptorSetLayout;
+    VkDescriptorSetLayoutCreateInfo;
+    VkDescriptorPool;
+    VkDescriptorSet;
+    VkDescriptorSetLayoutBinding;
+    "VkBuffer (uniform)";
+  };
+
+  subgraph cluster_pipeline {
+    label = "Pass";
+    labeljust="l";
+    VkPipeline;
+    VkPipelineLayout;
+    VkRenderPass;
+  };
+
+  subgraph cluster_images {
+    label = "Images";
+    labeljust="l";
+    VkFramebuffer;
+    VkImageView;
+    VkImage;
+  };
+
+  subgraph cluster_shader {
+    label = "Shaders";
+    labeljust="l";
+    VkShaderModule;
+    VkVertexInputBindingDescription;
+    VkVertexInputAttributeDescription;
+  };
+
+  subgraph cluster_device {
+    label = "Device";
+    labeljust="l";
+    VkSwapchain;
+    VkSwapExtent2D;
+    VkSurfaceFormat;
+  };
+
+  // VkBuffer -> VkDevice;
+  VkDeviceMemory -> VkBuffer;
+
+  // VkCommandPool -> VkDevice;
+  VkCommandPool -> graphics_index;
+
+  // VkDescriptorSetLayout -> VkDevice;
+  VkDescriptorSetLayout -> VkSwapchain;
+  VkDescriptorSetLayout -> VkDescriptorSetLayoutCreateInfo;
+
+  VkDescriptorSetLayoutCreateInfo -> VkDescriptorSetLayoutBinding;
+
+  // VkDescriptorPool -> VkDevice;
+  VkDescriptorPool -> VkSwapchain;
+
+  // "VkBuffer (uniform)" -> VkDevice;
+  "VkBuffer (uniform)" -> VkSwapchain;
+
+  // VkPipeline -> VkDevice;
+  VkPipeline -> VkVertexInputBindingDescription;
+  VkPipeline -> VkVertexInputAttributeDescription;
+  VkPipeline -> VkShaderModule;
+  VkPipeline -> VkPipelineLayout;
+  VkPipeline -> VkRenderPass;
+  VkPipeline -> VkSurfaceFormat;
+  VkPipeline -> VkSwapExtent2D;
+
+  // VkPipelineLayout -> VkDevice;
+  VkPipelineLayout -> VkDescriptorSetLayout;
+
+  // VkRenderPass -> VkDevice;
+  VkRenderPass -> VkSurfaceFormat;
+
+  VkImageView -> VkImage;
+  VkImageView -> VkSurfaceFormat;
+
+  // VkFramebuffer -> VkDevice;
+  VkFramebuffer -> VkRenderPass;
+  VkFramebuffer -> VkImageView;
+  VkFramebuffer -> VkSwapExtent2D;
+  VkFramebuffer -> VkSwapchain;
+
+  // VkDescriptorSet -> VkDevice;
+  VkDescriptorSet -> VkDescriptorSetLayout;
+  VkDescriptorSet -> VkSwapchain;
+  VkDescriptorSet -> VkDescriptorPool;
+  VkDescriptorSet -> "VkBuffer (uniform)";
+
+  // VkCommandBuffer -> VkDevice;
+  VkCommandBuffer -> VkCommandPool;
+  VkCommandBuffer -> VkSwapchain;
+  VkCommandBuffer -> VkRenderPass;
+  VkCommandBuffer -> VkFramebuffer;
+  VkCommandBuffer -> VkSwapExtent2D
+  VkCommandBuffer -> VkSwapchain;
+  VkCommandBuffer -> VkPipelineLayout;
+  VkCommandBuffer -> VkBuffer;
+
+  VkSwapExtent2D -> VkSwapchain;
+  VkSwapchain -> VkSurfaceFormat;
+}

@@ -8,4 +8,5 @@ TAGS
 *.o
 **/#*
 **/.#*
+doc/*.png
 src/shaders/*.h

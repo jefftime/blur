@@ -1,0 +1,14 @@
+digraph {
+  graph [rankdir=LR];
+
+  Images -> Device;
+  Images -> Pass;
+
+  Pass -> Device;
+  Pass -> Shaders;
+  Pass -> Uniforms;
+
+  CommandBuffer -> Images;
+  CommandBuffer -> Device;
+  CommandBuffer -> Pass;
+}
